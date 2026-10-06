@@ -50,14 +50,16 @@ local LOGO_ID = "rbxassetid://6023426921"
 
 local ICONS = {
 	Logo = "rbxassetid://6023426921",
-	Diamond = "",
+	Diamond = "rbxassetid://135010826045493",
 	Arrow = "rbxassetid://86644458913479",
-	Close = "",
-	Minimize = "",
-	Search = "",
-	Settings = "",
-	Spectate = "",
-	Pin = "",
+	Close = "rbxassetid://71379270081112",
+	Minimize = "rbxassetid://95004752241443",
+	Search = "rbxassetid://98893121141113",
+	Settings = "rbxassetid://110768919221533",
+	Spectate = "rbxassetid://137427491983393",
+	Pin = "rbxassetid://129283132557583",
+	Spectate_Selected = "rbxassetid://77306507937998",
+	Pin_Selected = "rbxassetid://135812284323262",
 }
 
 local function iconOrText(id, fallback)
@@ -1227,7 +1229,7 @@ function Library:CreateSidePanel(opts)
 	local W = opts.Width or 230
 	local panel = {}
 
-	local root = new("Frame", {
+	local root = new("CanvasGroup", {
 		Name = "SidePanel",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(1, 20, 0.5, 0),
@@ -1363,26 +1365,85 @@ function Library:CreateSidePanel(opts)
 	end
 	function panel:ClearAvatar() avatar.Image = "" end
 
+	local DOCK_HIDDEN = UDim2.new(1, -W + 10, 0.5, 0)
+	local DOCK_SHOWN = UDim2.new(1, 16, 0.5, 0)
+	local win = self
+
+	root.Position = DOCK_HIDDEN
+	root.ZIndex = 0
+
 	local shown = false
+	local detached = false
+	local detachConn
+	local shownBeforeDetach = false
+
+	local function worldHomePos()
+		local holder = win.Holder
+		local hp = holder.AbsolutePosition
+		local hs = holder.AbsoluteSize
+		local scale = win.UIScale.Scale
+		return Vector2.new(hp.X + hs.X + 16 * scale, hp.Y + hs.Y / 2 - root.AbsoluteSize.Y / 2)
+	end
+
 	function panel:Show()
+		if detached then return end
 		if shown then return end
 		shown = true
 		root.Visible = true
-		root.Position = UDim2.new(1, 40, 0.5, 0)
-		scale.Scale = 0.9
-		tween(root, 0.4, { Position = UDim2.new(1, 20, 0.5, 0) }, Enum.EasingStyle.Quint)
-		tween(scale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
+		root.ZIndex = 0
+		root.Position = DOCK_HIDDEN
+		tween(root, 0.45, { Position = DOCK_SHOWN }, Enum.EasingStyle.Quint)
 	end
 	function panel:Hide()
+		if detached then return end
 		if not shown then return end
 		shown = false
-		tween(root, 0.3, { Position = UDim2.new(1, 60, 0.5, 0) }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-		tween(scale, 0.3, { Scale = 0.9 })
-		task.delay(0.3, function() if not shown then root.Visible = false end end)
+		tween(root, 0.4, { Position = DOCK_HIDDEN }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		task.delay(0.4, function() if not shown and not detached then root.Visible = false end end)
 	end
+
+	local function detach(fromPos)
+		if detached then return end
+		detached = true
+		shownBeforeDetach = shown
+		root.Parent = win.Gui
+		root.AnchorPoint = Vector2.new(0, 0)
+		root.ZIndex = 60
+		local p = fromPos or worldHomePos()
+		root.Position = UDim2.fromOffset(p.X, p.Y)
+		root.Visible = true
+		shown = true
+		playSound(SOUND_CLICK, 0.3, 1.2)
+		if opts.OnDetach then opts.OnDetach(true) end
+	end
+
+	local function reattach()
+		if not detached then return end
+		detached = false
+		local home = worldHomePos()
+		tween(root, 0.35, { Position = UDim2.fromOffset(home.X, home.Y) }, Enum.EasingStyle.Quint).Completed:Connect(function()
+			if detached then return end
+			root.Parent = win.Holder
+			root.AnchorPoint = Vector2.new(0, 0.5)
+			root.ZIndex = 0
+			root.Position = DOCK_SHOWN
+			shown = true
+			local str = root:FindFirstChildOfClass("UIStroke")
+			if str then tween(str, 0.2, { Color = Color3.new(1, 1, 1), Transparency = 0.88 }) end
+			if win.ActiveTab ~= panel._homeTab and not pinned then panel:Hide() end
+		end)
+		playSound(SOUND_CLICK, 0.3, 0.9)
+		if opts.OnDetach then opts.OnDetach(false) end
+	end
+
+	function panel:IsDetached() return detached end
 	function panel:IsPinned() return pinned end
+	local pinSel = type(ICONS.Pin_Selected) == "string" and ICONS.Pin_Selected ~= ""
 	local function applyPin()
-		if pinImg then pinImg.ImageColor3 = pinned and THEME.Accent or THEME.SubText end
+		if pinImg then
+			if pinSel then pinImg.Image = pinned and ICONS.Pin_Selected or ICONS.Pin end
+			pinImg.ImageColor3 = pinned and THEME.Accent or THEME.SubText
+		end
 		if pinGlyph then pinGlyph.TextTransparency = pinned and 0 or 0.4 end
 		tween(pinBtn, 0.2, { BackgroundTransparency = pinned and 0.85 or 1 })
 	end
@@ -1395,6 +1456,57 @@ function Library:CreateSidePanel(opts)
 	pinBtn.Activated:Connect(function() panel:SetPinned(not pinned) end)
 	pinBtn.MouseEnter:Connect(function() if not pinned then tween(pinBtn, 0.15, { BackgroundTransparency = 0.9 }) end end)
 	pinBtn.MouseLeave:Connect(function() if not pinned then tween(pinBtn, 0.15, { BackgroundTransparency = 1 }) end end)
+
+	local dragHandle = new("TextButton", {
+		Size = UDim2.new(1, -44, 0, 40),
+		Position = UDim2.fromOffset(0, 0),
+		BackgroundTransparency = 1,
+		AutoButtonColor = false,
+		Text = "",
+		Active = true,
+		ZIndex = 5,
+		Parent = header,
+	})
+
+	local dragging, dragStart, startAbs = false, nil, nil
+	local DETACH_THRESHOLD = 60
+	local SNAP_RADIUS = 90
+
+	dragHandle.InputBegan:Connect(function(input)
+		if not isPress(input) then return end
+		dragging = true
+		dragStart = input.Position
+		startAbs = root.AbsolutePosition
+		local conn
+		conn = input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+				conn:Disconnect()
+				if detached then
+					local home = worldHomePos()
+					local cur = root.AbsolutePosition
+					if (Vector2.new(cur.X, cur.Y) - home).Magnitude < SNAP_RADIUS then
+						reattach()
+					end
+				end
+			end
+		end)
+	end)
+	table.insert(self.Connections, UserInputService.InputChanged:Connect(function(input)
+		if not dragging or not isMove(input) then return end
+		local delta = input.Position - dragStart
+		local target = startAbs + Vector2.new(delta.X, delta.Y)
+		if not detached then
+			if math.abs(delta.X) + math.abs(delta.Y) > DETACH_THRESHOLD then
+				detach(Vector2.new(target.X, target.Y))
+			end
+		else
+			root.Position = UDim2.fromOffset(target.X, target.Y)
+			local home = worldHomePos()
+			local near = (Vector2.new(target.X, target.Y) - home).Magnitude < SNAP_RADIUS
+			tween(root:FindFirstChildOfClass("UIStroke"), 0.15, { Color = near and THEME.Accent or Color3.new(1, 1, 1), Transparency = near and 0.3 or 0.88 })
+		end
+	end))
 
 	panel.Root = root
 	applyPin()
@@ -2132,6 +2244,7 @@ local function titleBlock(parent, name, description, rightInset, iconId)
 	local tx = 12
 	if type(iconId) == "string" and iconId ~= "" then
 		new("ImageLabel", {
+			Name = "TitleIcon",
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 12, 0.5, 0),
 			Size = UDim2.fromOffset(16, 16),
@@ -2361,6 +2474,9 @@ function Tab:AddToggle(opts)
 	})
 	hoverable(frame, hit)
 
+	local titleIcon = frame:FindFirstChild("TitleIcon")
+	local iconBase = opts.Icon
+	local iconSel = opts.IconSelected
 	local function render(instant)
 		local t = instant and 0 or 0.28
 		local info = TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -2371,6 +2487,10 @@ function Tab:AddToggle(opts)
 			TweenInfo.new(t, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 			{ Position = state and UDim2.new(1, -19, 0.5, 0) or UDim2.new(0, 3, 0.5, 0) }
 		):Play()
+		if titleIcon and type(iconSel) == "string" and iconSel ~= "" then
+			titleIcon.Image = state and iconSel or (iconBase or iconSel)
+			titleIcon.ImageColor3 = state and self.Accent or THEME.Text
+		end
 	end
 
 	local api = {}
@@ -4041,7 +4161,13 @@ function Tab:AddPlayerSearch(opts)
 	end
 	function api:Toggle() if open then api:Close() else api:Open() end end
 
-	searchBtn.Activated:Connect(function() api:Toggle() end)
+	searchBtn.Activated:Connect(function()
+		if box:IsFocused() then
+			box:ReleaseFocus()
+		else
+			api:Toggle()
+		end
+	end)
 	box.Focused:Connect(function() api:Open() end)
 	box:GetPropertyChangedSignal("Text"):Connect(function()
 		if open then
