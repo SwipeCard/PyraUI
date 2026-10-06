@@ -48,6 +48,21 @@ local FONT_BOLD   = Enum.Font.GothamBold
 
 local LOGO_ID = "rbxassetid://6023426921"
 
+local ICONS = {
+	Logo = "rbxassetid://6023426921",
+	Diamond = "",
+	Arrow = "",
+	Close = "",
+	Minimize = "",
+	Search = "",
+	Settings = "",
+	Spectate = "",
+}
+
+local function iconOrText(id, fallback)
+	return (type(id) == "string" and id ~= "" and id) or nil, fallback
+end
+
 local WINDOW_W = 640
 local DOCK_H   = 44
 local GAP      = 8
@@ -532,7 +547,8 @@ function Library.new(config)
 		Parent = self.TabBar,
 	}, { corner(8) })
 
-	local function dockButton(text, xOffset)
+	local function dockButton(text, xOffset, iconId)
+		local useIcon = type(iconId) == "string" and iconId ~= ""
 		local b = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, xOffset, 0.5, 0),
@@ -540,19 +556,38 @@ function Library.new(config)
 			BackgroundColor3 = THEME.Card,
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
-			Text = text,
+			Text = useIcon and "" or text,
 			Font = FONT_MEDIUM,
 			TextSize = 17,
 			TextColor3 = THEME.SubText,
 			ZIndex = 4,
 			Parent = self.Dock,
 		}, { corner(8) })
-		b.MouseEnter:Connect(function() tween(b, 0.2, { BackgroundTransparency = 0.9, TextColor3 = THEME.Text }) end)
-		b.MouseLeave:Connect(function() tween(b, 0.2, { BackgroundTransparency = 1, TextColor3 = THEME.SubText }) end)
+		local img
+		if useIcon then
+			img = new("ImageLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(15, 15),
+				BackgroundTransparency = 1,
+				Image = iconId,
+				ImageColor3 = THEME.SubText,
+				ZIndex = 5,
+				Parent = b,
+			})
+		end
+		b.MouseEnter:Connect(function()
+			tween(b, 0.2, { BackgroundTransparency = 0.9, TextColor3 = THEME.Text })
+			if img then tween(img, 0.2, { ImageColor3 = THEME.Text }) end
+		end)
+		b.MouseLeave:Connect(function()
+			tween(b, 0.2, { BackgroundTransparency = 1, TextColor3 = THEME.SubText })
+			if img then tween(img, 0.2, { ImageColor3 = THEME.SubText }) end
+		end)
 		return b
 	end
-	local closeButton = dockButton("×", -8)
-	self.MinButton = dockButton("-", -40)
+	local closeButton = dockButton("×", -8, ICONS.Close)
+	self.MinButton = dockButton("-", -40, ICONS.Minimize)
 	closeButton.Activated:Connect(function() self:Hide() end)
 	self.MinButton.Activated:Connect(function() self:SetMinimized(not self.Minimized) end)
 
@@ -571,12 +606,24 @@ function Library.new(config)
 		Parent = self.Dock,
 	}, { corner(8), stroke(Color3.new(1, 1, 1), 1) })
 	local searchStroke = search:FindFirstChildOfClass("UIStroke")
+	local useSearchIcon = type(ICONS.Search) == "string" and ICONS.Search ~= ""
 	local icon = label({
-		Text = "⌕", Font = FONT_BOLD, TextSize = 18, TextColor3 = THEME.SubText,
+		Text = useSearchIcon and "" or "⌕", Font = FONT_BOLD, TextSize = 18, TextColor3 = THEME.SubText,
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0),
 		Size = UDim2.fromOffset(18, 24), TextXAlignment = Enum.TextXAlignment.Center,
 		ZIndex = 9, Parent = search,
 	})
+	local searchImg
+	if useSearchIcon then
+		searchImg = new("ImageLabel", {
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -7, 0.5, 0),
+			Size = UDim2.fromOffset(15, 15), BackgroundTransparency = 1,
+			Image = ICONS.Search, ImageColor3 = THEME.SubText, ZIndex = 9, Parent = search,
+		})
+		icon:GetPropertyChangedSignal("TextColor3"):Connect(function()
+			searchImg.ImageColor3 = icon.TextColor3
+		end)
+	end
 	local searchBox = new("TextBox", {
 		Position = UDim2.fromOffset(10, 0),
 		Size = UDim2.new(1, -34, 1, 0),
@@ -1660,21 +1707,35 @@ function Tab:AddGroup()
 	}, Tab)
 end
 
-local function titleBlock(parent, name, description, rightInset)
+local function titleBlock(parent, name, description, rightInset, iconId)
+	local tx = 12
+	if type(iconId) == "string" and iconId ~= "" then
+		new("ImageLabel", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 12, 0.5, 0),
+			Size = UDim2.fromOffset(16, 16),
+			BackgroundTransparency = 1,
+			Image = iconId,
+			ImageColor3 = THEME.Text,
+			ZIndex = 4,
+			Parent = parent,
+		})
+		tx = 36
+	end
 	if description then
 		return label({
 			Text = name, Font = FONT_MEDIUM, TextSize = 13,
-			Position = UDim2.fromOffset(12, 7), Size = UDim2.new(1, -(12 + rightInset), 0, 16),
+			Position = UDim2.fromOffset(tx, 7), Size = UDim2.new(1, -(tx + rightInset), 0, 16),
 			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = parent,
 		}), label({
 			Text = description, TextSize = 11, TextColor3 = THEME.SubText,
-			Position = UDim2.fromOffset(12, 24), Size = UDim2.new(1, -(12 + rightInset), 0, 14),
+			Position = UDim2.fromOffset(tx, 24), Size = UDim2.new(1, -(tx + rightInset), 0, 14),
 			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = parent,
 		})
 	else
 		return label({
 			Text = name, Font = FONT_MEDIUM, TextSize = 13,
-			Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -(12 + rightInset), 1, 0),
+			Position = UDim2.fromOffset(tx, 0), Size = UDim2.new(1, -(tx + rightInset), 1, 0),
 			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = parent,
 		})
 	end
@@ -1823,6 +1884,7 @@ function Tab:AddToggle(opts)
 	local state = opts.Default == true
 	local hasKey = opts.Keybind ~= nil or opts.ShowKeybind == true
 	local hasDrop = type(opts.Options) == "table" and #opts.Options > 0
+	local hasChip = type(opts.Chip) == "string"
 	local sliderOpts = opts.Slider
 	local baseH = opts.Description and 50 or 38
 	if sliderOpts then baseH = 68 end
@@ -1832,6 +1894,7 @@ function Tab:AddToggle(opts)
 	local inset = 70
 	if hasKey then inset = 110 end
 	if hasDrop then inset = 164 end
+	if hasChip then inset = 110 end
 
 	if sliderOpts then
 		label({
@@ -1847,7 +1910,7 @@ function Tab:AddToggle(opts)
 			})
 		end
 	else
-		titleBlock(frame, opts.Name or "Toggle", opts.Description, inset)
+		titleBlock(frame, opts.Name or "Toggle", opts.Description, inset, opts.Icon)
 	end
 	self.Window:_index(self, frame, opts.Name or "Toggle", opts.Description)
 
@@ -2038,6 +2101,39 @@ function Tab:AddToggle(opts)
 		api.Keybind = { Get = function() return key end, Set = function(_, k) key = k crender() end }
 	end
 
+	if hasChip then
+		local chipState = opts.ChipDefault == true
+		local chip = new("TextButton", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -60, 0.5, 0),
+			Size = UDim2.fromOffset(42, 20),
+			BackgroundColor3 = chipState and self.Accent or THEME.Switch,
+			AutoButtonColor = false,
+			Font = FONT_BOLD,
+			TextSize = 9,
+			TextColor3 = chipState and self.AccentInverse or THEME.Text,
+			Text = opts.Chip,
+			ZIndex = 7,
+			Parent = frame,
+		}, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
+		local function chrender()
+			tween(chip, 0.2, { BackgroundColor3 = chipState and self.Accent or THEME.Switch })
+			chip.TextColor3 = chipState and self.AccentInverse or THEME.Text
+		end
+		local chipApi = {}
+		function chipApi:Set(on)
+			on = on == true
+			if on == chipState then return end
+			chipState = on
+			chrender()
+			playSound(SOUND_CLICK, 0.22, on and 1.05 or 0.95)
+			fire(opts.ChipCallback, on)
+		end
+		function chipApi:Get() return chipState end
+		chip.Activated:Connect(function() chipApi:Set(not chipState) end)
+		api.Chip = chipApi
+	end
+
 	if hasDrop then
 		local options = opts.Options
 		local selected = opts.Default2 or options[1]
@@ -2046,7 +2142,7 @@ function Tab:AddToggle(opts)
 
 		local box = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -60, 0, (baseH - 24) / 2),
+			Position = UDim2.new(1, -60, 0.5, 0),
 			Size = UDim2.fromOffset(88, 24),
 			BackgroundColor3 = THEME.Card,
 			BackgroundTransparency = 0.92,
@@ -2082,7 +2178,7 @@ function Tab:AddToggle(opts)
 		})
 		local dropAnchor = new("Frame", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -60, 0, (baseH - 24) / 2),
+			Position = UDim2.new(1, -60, 0.5, 0),
 			Size = UDim2.fromOffset(88, 24),
 			BackgroundTransparency = 1,
 			ZIndex = 7,
@@ -2396,11 +2492,22 @@ function Tab:AddButton(opts)
 	local titleLabel, descLabel = titleBlock(frame, opts.Name or "Button", opts.Description, 36)
 	self.Window:_index(self, frame, opts.Name or "Button", opts.Description)
 
+	local useArrowIcon = type(ICONS.Arrow) == "string" and ICONS.Arrow ~= ""
 	local arrow = label({
-		Text = "›", Font = FONT_BOLD, TextSize = 18, TextColor3 = THEME.SubText,
+		Text = useArrowIcon and "" or "›", Font = FONT_BOLD, TextSize = 18, TextColor3 = THEME.SubText,
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, -1),
 		Size = UDim2.fromOffset(12, 18), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 4, Parent = frame,
 	})
+	local arrowImg
+	if useArrowIcon then
+		arrowImg = new("ImageLabel", {
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, -1),
+			Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1,
+			Image = ICONS.Arrow, ImageColor3 = THEME.SubText, ZIndex = 4, Parent = frame,
+		})
+		arrow:GetPropertyChangedSignal("TextColor3"):Connect(function() arrowImg.ImageColor3 = arrow.TextColor3 end)
+		arrow:GetPropertyChangedSignal("Position"):Connect(function() arrowImg.Position = arrow.Position end)
+	end
 	local hit = new("TextButton", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = frame,
 	})
@@ -2896,27 +3003,21 @@ function Tab:AddRandomSlider(opts)
 	local frame = elementFrame(self, 50)
 	label({
 		Text = opts.Name or "Value", Font = FONT_MEDIUM, TextSize = 13,
-		Position = UDim2.fromOffset(12, 7), Size = UDim2.new(1, -170, 0, 16),
+		Position = UDim2.fromOffset(12, 7), Size = UDim2.new(1, -140, 0, 16),
 		TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = frame,
 	})
 	local valueLabel = valueBox({
-		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 5), Size = UDim2.fromOffset(120, 20),
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 5), Size = UDim2.fromOffset(130, 20),
 		Parent = frame,
 	})
 
 	local rngChip = new("TextButton", {
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -132, 0, 5),
-		Size = UDim2.fromOffset(42, 20),
-		BackgroundColor3 = THEME.Switch,
-		AutoButtonColor = false,
-		Font = FONT_BOLD,
-		TextSize = 9,
-		TextColor3 = THEME.Text,
-		Text = "RNG",
-		ZIndex = 5,
+		Size = UDim2.fromOffset(1, 1),
+		BackgroundTransparency = 1,
+		Text = "",
+		Visible = false,
 		Parent = frame,
-	}, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
+	})
 	self.Window:_index(self, frame, opts.Name or "Value", opts.Description)
 
 	local track = new("Frame", {
@@ -3208,5 +3309,7 @@ function Tab:AddInput(opts)
 	end)
 	return api
 end
+
+Library.Icons = ICONS
 
 return Library
