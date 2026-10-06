@@ -1429,11 +1429,11 @@ function Library:CreateSidePanel(opts)
 		if detached then return end
 		detached = true
 		shownBeforeDetach = shown
+		local abs = root.AbsolutePosition
 		root.Parent = win.Gui
 		root.AnchorPoint = Vector2.new(0, 0)
 		root.ZIndex = 60
-		local p = fromPos or worldHomePos()
-		root.Position = UDim2.fromOffset(p.X, p.Y)
+		root.Position = UDim2.fromOffset(abs.X, abs.Y)
 		root.Visible = true
 		root.GroupTransparency = 0
 		shown = true
@@ -1527,7 +1527,9 @@ function Library:CreateSidePanel(opts)
 		local target = startAbs + Vector2.new(delta.X, delta.Y)
 		if not detached then
 			if math.abs(delta.X) + math.abs(delta.Y) > DETACH_THRESHOLD then
-				detach(Vector2.new(target.X, target.Y))
+				detach()
+				dragStart = input.Position
+				startAbs = root.AbsolutePosition
 			end
 		else
 			local home = worldHomePos()
@@ -4157,6 +4159,7 @@ function Tab:AddPlayerSearch(opts)
 	})
 
 	local open = false
+	local selecting = false
 	local api = {}
 
 	local function rebuild(query)
@@ -4208,6 +4211,9 @@ function Tab:AddPlayerSearch(opts)
 					row.MouseEnter:Connect(function() tween(row, 0.12, { BackgroundTransparency = CARD_HOVER_T }) end)
 					row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = CARD_T }) end)
 					row.Activated:Connect(function()
+						selecting = true
+						box.Text = p.DisplayName
+						selecting = false
 						fire(opts.Callback, p)
 						api:Close()
 					end)
@@ -4230,7 +4236,6 @@ function Tab:AddPlayerSearch(opts)
 	function api:Close()
 		if not open then return end
 		open = false
-		box.Text = ""
 		if box:IsFocused() then box:ReleaseFocus() end
 		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER) }, Enum.EasingStyle.Quint)
 		tween(boxStroke, 0.2, { Transparency = 0.85 })
@@ -4240,13 +4245,26 @@ function Tab:AddPlayerSearch(opts)
 	searchBtn.Activated:Connect(function()
 		if box:IsFocused() then
 			box:ReleaseFocus()
+		elseif open then
+			box:CaptureFocus()
 		else
-			api:Toggle()
+			api:Open()
 		end
 	end)
-	box.Focused:Connect(function() api:Open() end)
+	local focusGuard = false
+	box.Focused:Connect(function()
+		focusGuard = true
+		api:Open()
+		task.delay(0.1, function() focusGuard = false end)
+	end)
+	box.InputBegan:Connect(function(input)
+		if not isPress(input) then return end
+		if box:IsFocused() and not focusGuard then
+			box:ReleaseFocus()
+		end
+	end)
 	box:GetPropertyChangedSignal("Text"):Connect(function()
-		if open then
+		if open and not selecting then
 			local listH = rebuild(box.Text)
 			tween(frame, 0.15, { Size = UDim2.new(1, 0, 0, HEADER + listH) })
 		end
