@@ -306,6 +306,7 @@ local function runIntro(gui, onComplete)
 		Parent = gui,
 	})
 	local blur = Instance.new("BlurEffect")
+	blur.Name = "PyraBlur"
 	blur.Size = 0
 	blur.Parent = Lighting
 	tween(blur, 0.5, { Size = 28 })
@@ -433,6 +434,11 @@ function Library.new(config)
 	self.ParallaxVelocity = Vector2.zero
 	self.SuppressedDof = {}
 
+	if _G.__PYRA_ACTIVE then
+		pcall(function() _G.__PYRA_ACTIVE:Destroy() end)
+		_G.__PYRA_ACTIVE = nil
+	end
+
 	local guiParent = getGuiParent()
 	for _, c in ipairs(guiParent:GetChildren()) do
 		if c.Name == "PyraUI" then c:Destroy() end
@@ -441,7 +447,10 @@ function Library.new(config)
 		if c.Name == "PyraGlass" then c:Destroy() end
 	end
 	for _, c in ipairs(Lighting:GetChildren()) do
-		if c.Name == "PyraAcrylic" or c.Name == "PyraGrade" then c:Destroy() end
+		if c.Name == "PyraAcrylic" or c.Name == "PyraGrade" or c.Name == "PyraBlur" then c:Destroy() end
+	end
+	for _, c in ipairs(SoundService:GetChildren()) do
+		if c.Name == "PyraSound" then c:Destroy() end
 	end
 
 	self.Gui = new("ScreenGui", {
@@ -1036,6 +1045,8 @@ function Library.new(config)
 	self.Gui.Parent = guiParent
 	protect(self.Gui)
 
+	_G.__PYRA_ACTIVE = self
+
 	runIntro(self.Gui, function() self:Show() end)
 
 	return self
@@ -1111,15 +1122,23 @@ function Library:SetMinimized(state)
 	if state == self.Minimized then return end
 	self.Minimized = state
 	self.MinButton.Text = state and "+" or "-"
+
+	local fullH = DOCK_H + GAP + PANEL_H + GAP + FOOTER_H
+	local miniH = DOCK_H + GAP + FOOTER_H
+	local dockUsed = 108 + (self.TabBarWidth or 0) + 110
+	local miniW = math.clamp(dockUsed, 300, WINDOW_W)
+
 	if state then
 		tween(self.Panel, 0.35, { Size = UDim2.new(1, 0, 0, 0) }).Completed:Connect(function()
 			if self.Minimized then self.Panel.Visible = false end
 		end)
 		tween(self.Footer, 0.35, { Position = UDim2.new(0, 0, 0, DOCK_H + GAP) })
+		tween(self.Holder, 0.4, { Size = UDim2.fromOffset(miniW, miniH) }, Enum.EasingStyle.Quint)
 	else
 		self.Panel.Visible = true
 		tween(self.Panel, 0.4, { Size = UDim2.new(1, 0, 0, PANEL_H) })
 		tween(self.Footer, 0.4, { Position = UDim2.new(0, 0, 0, self.FooterY) })
+		tween(self.Holder, 0.4, { Size = UDim2.fromOffset(WINDOW_W, fullH) }, Enum.EasingStyle.Quint)
 	end
 end
 
@@ -1454,16 +1473,31 @@ function Library:Notify(title, text, duration)
 	task.delay(duration, close)
 end
 
+function Library:OnDestroy(fn)
+	self.DestroyListeners = self.DestroyListeners or {}
+	table.insert(self.DestroyListeners, fn)
+end
+
 function Library:Destroy()
+	if self.Destroyed then return end
 	self.Destroyed = true
-	for _, c in ipairs(self.Connections) do c:Disconnect() end
-	for _, a in ipairs(self.Acrylic) do a:Destroy() end
-	self:_suppressOtherDof(false)
+	for _, fn in ipairs(self.DestroyListeners or {}) do pcall(fn) end
+	for _, c in ipairs(self.Connections) do pcall(function() c:Disconnect() end) end
+	self.Connections = {}
+	if self.Acrylic then for _, a in ipairs(self.Acrylic) do pcall(function() a:Destroy() end) end end
+	pcall(function() self:_suppressOtherDof(false) end)
 	if acrylicDof then acrylicDof:Destroy() acrylicDof = nil end
-	if self.Grade then self.Grade:Destroy() end
-	for _, snd in pairs(soundCache) do snd:Destroy() end
+	if self.Grade then self.Grade:Destroy() self.Grade = nil end
+	for _, snd in pairs(soundCache) do pcall(function() snd:Destroy() end) end
 	table.clear(soundCache)
-	self.Gui:Destroy()
+	for _, c in ipairs(Lighting:GetChildren()) do
+		if c.Name == "PyraBlur" then c:Destroy() end
+	end
+	for _, c in ipairs(workspace:GetChildren()) do
+		if c.Name == "PyraGlass" then c:Destroy() end
+	end
+	if self.Gui then self.Gui:Destroy() end
+	if _G.__PYRA_ACTIVE == self then _G.__PYRA_ACTIVE = nil end
 end
 
 function Library:_index(tab, frame, name, desc)
@@ -2259,8 +2293,9 @@ function Tab:AddToggle(opts)
 		local arr
 		if arrUseIcon then
 			arr = new("ImageLabel", {
-				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
-				Size = UDim2.fromOffset(10, 10), BackgroundTransparency = 1,
+				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -7, 0.5, 0),
+				Size = UDim2.fromOffset(16, 10), BackgroundTransparency = 1,
+				ScaleType = Enum.ScaleType.Fit,
 				Image = ICONS.Arrow, ImageColor3 = THEME.SubText, ZIndex = 8, Parent = box,
 			})
 		else
@@ -2614,8 +2649,9 @@ function Tab:AddButton(opts)
 	local arrowImg
 	if useArrowIcon then
 		arrowImg = new("ImageLabel", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, -1),
-			Size = UDim2.fromOffset(11, 11), BackgroundTransparency = 1, Rotation = -90,
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.5, -1),
+			Size = UDim2.fromOffset(16, 10), BackgroundTransparency = 1, Rotation = -90,
+			ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Arrow, ImageColor3 = THEME.SubText, ZIndex = 4, Parent = frame,
 		})
 		arrow:GetPropertyChangedSignal("TextColor3"):Connect(function() arrowImg.ImageColor3 = arrow.TextColor3 end)
@@ -2685,8 +2721,9 @@ function Tab:AddDropdown(opts)
 	local arrow
 	if arrowUseIcon then
 		arrow = new("ImageLabel", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0, HEADER / 2),
-			Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0, HEADER / 2),
+			Size = UDim2.fromOffset(18, 12), BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Arrow, ImageColor3 = THEME.SubText, ZIndex = 4, Parent = frame,
 		})
 	else
