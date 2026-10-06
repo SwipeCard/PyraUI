@@ -709,6 +709,16 @@ function Library.new(config)
 		Parent = self.Panel,
 	})
 
+	self.ContentHighlight = new("Frame", {
+		Name = "ContentHighlight",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 50,
+		Parent = self.Content,
+	}, { corner(12) })
+
 	self.SearchPage = new("CanvasGroup", {
 		Name = "SearchPage",
 		Size = UDim2.fromScale(1, 1),
@@ -1389,21 +1399,30 @@ function Library:CreateSidePanel(opts)
 		return Vector2.new(hp.X + hs.X + 16 * scale, hp.Y + hs.Y / 2 - root.AbsoluteSize.Y / 2)
 	end
 
+	local showTok = 0
 	function panel:Show()
 		if detached then return end
 		if shown then return end
 		shown = true
+		showTok += 1
 		root.Visible = true
 		root.ZIndex = 0
 		root.Position = DOCK_HIDDEN
-		tween(root, 0.45, { Position = DOCK_SHOWN }, Enum.EasingStyle.Quint)
+		root.GroupTransparency = 1
+		tween(root, 0.5, { Position = DOCK_SHOWN }, Enum.EasingStyle.Quint)
+		tween(root, 0.4, { GroupTransparency = 0 }, Enum.EasingStyle.Quad)
 	end
 	function panel:Hide()
 		if detached then return end
 		if not shown then return end
 		shown = false
-		tween(root, 0.4, { Position = DOCK_HIDDEN }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-		task.delay(0.4, function() if not shown and not detached then root.Visible = false end end)
+		showTok += 1
+		local tok = showTok
+		tween(root, 0.45, { Position = DOCK_HIDDEN }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		tween(root, 0.3, { GroupTransparency = 1 }, Enum.EasingStyle.Quad)
+		task.delay(0.45, function()
+			if tok == showTok and not shown and not detached then root.Visible = false end
+		end)
 	end
 
 	local function detach(fromPos)
@@ -1416,6 +1435,7 @@ function Library:CreateSidePanel(opts)
 		local p = fromPos or worldHomePos()
 		root.Position = UDim2.fromOffset(p.X, p.Y)
 		root.Visible = true
+		root.GroupTransparency = 0
 		shown = true
 		playSound(SOUND_CLICK, 0.3, 1.2)
 		if opts.OnDetach then opts.OnDetach(true) end
@@ -1486,6 +1506,7 @@ function Library:CreateSidePanel(opts)
 			if input.UserInputState == Enum.UserInputState.End then
 				dragging = false
 				conn:Disconnect()
+				if win.ContentHighlight then tween(win.ContentHighlight, 0.2, { BackgroundTransparency = 1 }) end
 				if detached then
 					local home = worldHomePos()
 					local cur = root.AbsolutePosition
@@ -1509,6 +1530,9 @@ function Library:CreateSidePanel(opts)
 			local home = worldHomePos()
 			local near = (Vector2.new(target.X, target.Y) - home).Magnitude < SNAP_RADIUS
 			tween(root:FindFirstChildOfClass("UIStroke"), 0.15, { Color = near and THEME.Accent or Color3.new(1, 1, 1), Transparency = near and 0.3 or 0.88 })
+			if win.ContentHighlight then
+				tween(win.ContentHighlight, 0.15, { BackgroundTransparency = near and 0.85 or 1 })
+			end
 		end
 	end))
 
@@ -2625,6 +2649,7 @@ function Tab:AddToggle(opts)
 		srender(true)
 	end
 
+	local keyChipRef
 	if hasKey then
 		local key = opts.Keybind
 		local listening = false
@@ -2665,13 +2690,14 @@ function Tab:AddToggle(opts)
 			crender()
 		end))
 		crender()
+		keyChipRef = chip
 		api.Keybind = { Get = function() return key end, Set = function(_, k) key = k crender() end }
 	end
 
 	if hasChip then
 		local chipState = opts.ChipDefault == true
-		local chipX = hasKey and -110 or -60
 		local chipW = type(opts.Chip) == "string" and (#opts.Chip > 3) and (18 + #opts.Chip * 6) or 42
+		local chipX = hasKey and -60 or -60
 		local chip = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, chipX, 0.5, 0),
@@ -2701,6 +2727,14 @@ function Tab:AddToggle(opts)
 		function chipApi:Get() return chipState end
 		chip.Activated:Connect(function() chipApi:Set(not chipState) end)
 		api.Chip = chipApi
+
+		if hasKey and keyChipRef then
+			local function reposition()
+				chip.Position = UDim2.new(1, -60 - keyChipRef.AbsoluteSize.X - 6, 0.5, 0)
+			end
+			keyChipRef:GetPropertyChangedSignal("AbsoluteSize"):Connect(reposition)
+			task.defer(reposition)
+		end
 	end
 
 	if hasDrop then
