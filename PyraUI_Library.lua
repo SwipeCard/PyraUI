@@ -57,6 +57,7 @@ local ICONS = {
 	Search = "",
 	Settings = "",
 	Spectate = "",
+	Pin = "",
 }
 
 local function iconOrText(id, fallback)
@@ -654,75 +655,6 @@ function Library.new(config)
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 10, Parent = search,
 	})
 
-	local results = new("Frame", {
-		Name = "SearchResults",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, 0, 1, 8),
-		Size = UDim2.fromOffset(EXPANDED, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = THEME.Glass,
-		BackgroundTransparency = SOLID_T,
-		BorderSizePixel = 0,
-		Visible = false,
-		ZIndex = 30,
-		Parent = search,
-	}, {
-		corner(10), stroke(Color3.new(1, 1, 1), 0.86), pad(6, 6, 6, 6),
-		new("UIListLayout", { Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }),
-	})
-
-	local function clearResults()
-		for _, c in ipairs(results:GetChildren()) do
-			if c:IsA("TextButton") then c:Destroy() end
-		end
-	end
-
-	local function runSearch(query)
-		clearResults()
-		query = (query or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
-		if query == "" then results.Visible = false return end
-		local shown, i = 0, 0
-		for _, entry in ipairs(self.SearchIndex) do
-			if entry.text:lower():find(query, 1, true) and shown < 6 then
-				shown += 1
-				i += 1
-				local b = new("TextButton", {
-					Size = UDim2.new(1, 0, 0, 32),
-					BackgroundColor3 = THEME.Card,
-					BackgroundTransparency = 0.94,
-					AutoButtonColor = false,
-					Text = "",
-					LayoutOrder = i,
-					ZIndex = 31,
-					Parent = results,
-				}, { corner(6) })
-				label({
-					Text = entry.name, Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text,
-					Position = UDim2.fromOffset(9, 4), Size = UDim2.new(1, -16, 0, 15),
-					TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 32, Parent = b,
-				})
-				label({
-					Text = self:_resolveTabName(entry), Font = FONT_MEDIUM, TextSize = 9, TextColor3 = THEME.SubText,
-					Position = UDim2.fromOffset(9, 18), Size = UDim2.new(1, -16, 0, 11),
-					ZIndex = 32, Parent = b,
-				})
-				b.MouseEnter:Connect(function() tween(b, 0.12, { BackgroundTransparency = 0.88 }) end)
-				b.MouseLeave:Connect(function() tween(b, 0.12, { BackgroundTransparency = 0.94 }) end)
-				b.Activated:Connect(function()
-					self:_jumpTo(entry)
-				end)
-			end
-		end
-		if shown == 0 then
-			local b = new("TextButton", {
-				Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, AutoButtonColor = false,
-				Text = "No matches", Font = FONT, TextSize = 12, TextColor3 = THEME.Muted,
-				ZIndex = 31, Parent = results,
-			})
-		end
-		results.Visible = true
-	end
-
 	local function setSearch(open)
 		if open == searchOpen then return end
 		searchOpen = open
@@ -738,21 +670,32 @@ function Library.new(config)
 			searchBox.Text = ""
 			searchBox.TextEditable = false
 			searchBox.Visible = false
-			results.Visible = false
-			clearResults()
 			tween(search, 0.3, { Size = UDim2.fromOffset(COLLAPSED, 28), BackgroundTransparency = 1 }, Enum.EasingStyle.Quint)
-			tween(searchStroke, 0.3, { Transparency = 1 })
+			tween(searchStroke, 0.3, { Transparency = 1, Color = Color3.new(1, 1, 1) })
 			tween(icon, 0.2, { TextColor3 = THEME.SubText })
+			self:_hideSearchPage()
 		end
 	end
+	self._collapseSearch = function() setSearch(false) end
 
 	iconBtn.Activated:Connect(function()
+		if self.Minimized then self:SetMinimized(false) end
 		if searchOpen then searchBox:CaptureFocus() else setSearch(true) end
 	end)
-	searchBox:GetPropertyChangedSignal("Text"):Connect(function() runSearch(searchBox.Text) end)
+	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		local q = searchBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
+		if q ~= "" then
+			tween(searchStroke, 0.2, { Transparency = 0.3, Color = THEME.Accent })
+			self:_showSearchPage()
+			self:_updateSearchPage(searchBox.Text)
+		else
+			tween(searchStroke, 0.2, { Transparency = 0.82, Color = Color3.new(1, 1, 1) })
+			self:_hideSearchPage()
+		end
+	end)
 	searchBox.FocusLost:Connect(function()
 		task.wait(0.15)
-		if searchBox.Text == "" then setSearch(false) end
+		if searchBox.Text == "" and not self._searchActive then setSearch(false) end
 	end)
 	self.SearchBar = search
 
@@ -762,6 +705,35 @@ function Library.new(config)
 		BackgroundTransparency = 1,
 		ZIndex = 3,
 		Parent = self.Panel,
+	})
+
+	self.SearchPage = new("CanvasGroup", {
+		Name = "SearchPage",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		GroupTransparency = 1,
+		Visible = false,
+		ZIndex = 4,
+		Parent = self.Content,
+	})
+	self.SearchList = new("ScrollingFrame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 0,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ZIndex = 4,
+		Parent = self.SearchPage,
+	}, {
+		pad(12, 14, 12, 14),
+		new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	label({
+		Text = "SEARCH RESULTS", Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
+		Size = UDim2.new(1, 0, 0, 18), TextYAlignment = Enum.TextYAlignment.Bottom,
+		LayoutOrder = 0, ZIndex = 5, Parent = self.SearchList,
 	})
 
 	self.FooterY = DOCK_H + GAP + PANEL_H + GAP
@@ -1250,6 +1222,183 @@ function Library:_refreshMonitorSeparators()
 	end
 end
 
+function Library:CreateSidePanel(opts)
+	opts = opts or {}
+	local W = opts.Width or 230
+	local panel = {}
+
+	local root = new("Frame", {
+		Name = "SidePanel",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(1, 20, 0.5, 0),
+		Size = UDim2.fromOffset(W, 300),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = THEME.Glass,
+		BackgroundTransparency = self.IsMobile and SOLID_T or GLASS_PANEL_T,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 2,
+		Parent = self.Holder,
+	}, { corner(12), stroke(Color3.new(1, 1, 1), 0.88) })
+	if not self.IsMobile then
+		local a = createAcrylic(root)
+		table.insert(self.Acrylic, a)
+	end
+
+	local scale = new("UIScale", { Scale = 0.9, Parent = root })
+
+	new("ImageLabel", {
+		Name = "Noise", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+		Image = "rbxassetid://9968344227", ImageTransparency = 0.94,
+		ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(128, 128),
+		ZIndex = 2, Parent = root,
+	}, { corner(12) })
+
+	local header = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 40),
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = root,
+	})
+	local title = label({
+		Text = opts.Title or "Target Info", Font = FONT_BOLD, TextSize = 14,
+		Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -50, 1, 0),
+		TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = header,
+	})
+
+	local pinned = opts.Pinned == true
+	local pinBtn = new("TextButton", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.fromOffset(26, 26),
+		BackgroundColor3 = THEME.Card,
+		BackgroundTransparency = 1,
+		AutoButtonColor = false,
+		Text = "",
+		ZIndex = 4,
+		Parent = header,
+	}, { corner(7) })
+	local usePinIcon = type(ICONS.Pin) == "string" and ICONS.Pin ~= ""
+	local pinImg, pinGlyph
+	if usePinIcon then
+		pinImg = new("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(15, 15), BackgroundTransparency = 1,
+			Image = ICONS.Pin, ImageColor3 = THEME.SubText, ZIndex = 5, Parent = pinBtn,
+		})
+	else
+		pinGlyph = label({
+			Text = "📌", TextSize = 13, Size = UDim2.fromScale(1, 1),
+			TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 5, Parent = pinBtn,
+		})
+	end
+
+	local body = new("Frame", {
+		Position = UDim2.new(0, 0, 0, 40),
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = root,
+	}, {
+		new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
+		new("UIPadding", {
+			PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14),
+			PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 12),
+		}),
+	})
+
+	local avatar = new("ImageLabel", {
+		Size = UDim2.fromOffset(64, 64),
+		BackgroundColor3 = THEME.Switch,
+		LayoutOrder = 0,
+		ZIndex = 4,
+		Parent = body,
+	}, { round(), stroke(Color3.new(1, 1, 1), 0.85) })
+	local avatarWrap = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 72),
+		BackgroundTransparency = 1,
+		LayoutOrder = 0,
+		ZIndex = 4,
+		Parent = body,
+	})
+	avatar.Parent = avatarWrap
+	avatar.AnchorPoint = Vector2.new(0.5, 0)
+	avatar.Position = UDim2.new(0.5, 0, 0, 4)
+
+	local rows = {}
+	local function addStat(key)
+		local r = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 22),
+			BackgroundTransparency = 1,
+			LayoutOrder = #rows + 1,
+			ZIndex = 4,
+			Parent = body,
+		})
+		label({
+			Text = key, Font = FONT_MEDIUM, TextSize = 11, TextColor3 = THEME.SubText,
+			Position = UDim2.fromOffset(0, 0), Size = UDim2.new(0.42, 0, 1, 0), ZIndex = 5, Parent = r,
+		})
+		local v = label({
+			Text = "-", Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text,
+			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0.58, 0, 1, 0),
+			TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = r,
+		})
+		rows[key] = v
+		return v
+	end
+
+	function panel:SetAvatar(userId)
+		task.spawn(function()
+			local ok, img = pcall(function()
+				return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+			end)
+			if ok then avatar.Image = img end
+		end)
+	end
+	function panel:SetTitle(t) title.Text = t end
+	function panel:SetStat(key, value)
+		if not rows[key] then addStat(key) end
+		rows[key].Text = tostring(value)
+	end
+	function panel:ClearAvatar() avatar.Image = "" end
+
+	local shown = false
+	function panel:Show()
+		if shown then return end
+		shown = true
+		root.Visible = true
+		root.Position = UDim2.new(1, 40, 0.5, 0)
+		scale.Scale = 0.9
+		tween(root, 0.4, { Position = UDim2.new(1, 20, 0.5, 0) }, Enum.EasingStyle.Quint)
+		tween(scale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
+	end
+	function panel:Hide()
+		if not shown then return end
+		shown = false
+		tween(root, 0.3, { Position = UDim2.new(1, 60, 0.5, 0) }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		tween(scale, 0.3, { Scale = 0.9 })
+		task.delay(0.3, function() if not shown then root.Visible = false end end)
+	end
+	function panel:IsPinned() return pinned end
+	function panel:SetPinned(on)
+		pinned = on == true
+		local col = pinned and self.Accent or THEME.SubText
+		if pinImg then pinImg.ImageColor3 = pinned and THEME.Accent or THEME.SubText end
+		if pinGlyph then pinGlyph.TextTransparency = pinned and 0 or 0.4 end
+		tween(pinBtn, 0.2, { BackgroundTransparency = pinned and 0.85 or 1 })
+		if opts.OnPin then opts.OnPin(pinned) end
+	end
+
+	pinBtn.Activated:Connect(function() panel:SetPinned(not pinned) end)
+	pinBtn.MouseEnter:Connect(function() if not pinned then tween(pinBtn, 0.15, { BackgroundTransparency = 0.9 }) end end)
+	pinBtn.MouseLeave:Connect(function() if not pinned then tween(pinBtn, 0.15, { BackgroundTransparency = 1 }) end end)
+
+	panel.Root = root
+	panel:SetPinned(pinned)
+	return panel
+end
+
 function Library:AddMonitor(key, label_)
 	self:_ensureMonitorBar()
 	if self.MonitorItems[key] then return self.MonitorItems[key] end
@@ -1538,6 +1687,121 @@ function Library:_pulse(frame)
 	end)
 end
 
+function Library:_showSearchPage()
+	if self._searchActive then return end
+	self._searchActive = true
+	self._searchReturnTab = self.ActiveTab
+	if self.ActiveTab then
+		local old = self.ActiveTab.Page
+		tween(old, 0.25, { GroupTransparency = 1, Position = UDim2.fromOffset(-20, 0) })
+		task.delay(0.25, function()
+			if self._searchActive then old.Visible = false end
+		end)
+		tween(self.ActiveTab.Button, 0.25, { TextColor3 = THEME.SubText })
+		if self.ActiveTab.Icon then tween(self.ActiveTab.Icon, 0.25, { ImageColor3 = THEME.SubText }) end
+	end
+	tween(self.Pill, 0.3, { Size = UDim2.fromOffset(self.Pill.Size.X.Offset, 0) })
+	self.SearchPage.Visible = true
+	self.SearchPage.Position = UDim2.fromOffset(20, 0)
+	tween(self.SearchPage, 0.3, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) })
+end
+
+function Library:_hideSearchPage()
+	if not self._searchActive then return end
+	self._searchActive = false
+	local back = self._searchReturnTab
+	tween(self.SearchPage, 0.25, { GroupTransparency = 1, Position = UDim2.fromOffset(20, 0) })
+	task.delay(0.25, function()
+		if not self._searchActive then self.SearchPage.Visible = false end
+	end)
+	if back then
+		self.ActiveTab = nil
+		self:SelectTab(back, false)
+	end
+end
+
+function Library:_updateSearchPage(query)
+	local list = self.SearchList
+	for _, c in ipairs(list:GetChildren()) do
+		if c:IsA("TextButton") or c.Name == "NoneState" then c:Destroy() end
+	end
+	query = (query or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+	local shown, i = 0, 0
+	for _, entry in ipairs(self.SearchIndex) do
+		if entry.text:lower():find(query, 1, true) then
+			shown += 1
+			i += 1
+			local b = new("TextButton", {
+				Size = UDim2.new(1, 0, 0, 40),
+				BackgroundColor3 = THEME.Card,
+				BackgroundTransparency = CARD_T,
+				AutoButtonColor = false,
+				Text = "",
+				LayoutOrder = i,
+				ZIndex = 5,
+				Parent = list,
+			}, { corner(8), stroke(Color3.new(1, 1, 1), 0.92) })
+			label({
+				Text = entry.name, Font = FONT_MEDIUM, TextSize = 13, TextColor3 = THEME.Text,
+				Position = UDim2.fromOffset(12, 6), Size = UDim2.new(1, -24, 0, 16),
+				TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6, Parent = b,
+			})
+			label({
+				Text = self:_resolveTabName(entry), Font = FONT_MEDIUM, TextSize = 10, TextColor3 = THEME.SubText,
+				Position = UDim2.fromOffset(12, 22), Size = UDim2.new(1, -24, 0, 12),
+				ZIndex = 6, Parent = b,
+			})
+			b.MouseEnter:Connect(function() tween(b, 0.12, { BackgroundTransparency = CARD_HOVER_T }) end)
+			b.MouseLeave:Connect(function() tween(b, 0.12, { BackgroundTransparency = CARD_T }) end)
+			b.Activated:Connect(function() self:_jumpTo(entry) end)
+		end
+	end
+
+	if shown == 0 then
+		local none = new("Frame", {
+			Name = "NoneState",
+			Size = UDim2.new(1, 0, 0, 90),
+			BackgroundTransparency = 1,
+			LayoutOrder = 1,
+			ZIndex = 5,
+			Parent = list,
+		})
+		label({
+			Text = "Setting Not Found", Font = FONT_BOLD, TextSize = 15, TextColor3 = THEME.Text,
+			AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 18),
+			Size = UDim2.fromOffset(300, 20), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 6, Parent = none,
+		})
+		label({
+			Text = "Try rewording your search", TextSize = 12, TextColor3 = THEME.SubText,
+			AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 40),
+			Size = UDim2.fromOffset(300, 16), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 6, Parent = none,
+		})
+		local back = new("TextButton", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 62),
+			Size = UDim2.fromOffset(90, 24),
+			BackgroundColor3 = THEME.Accent,
+			AutoButtonColor = false,
+			Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.AccentInverse,
+			Text = "Go back",
+			ZIndex = 6,
+			Parent = none,
+		}, { corner(6) })
+		back.Activated:Connect(function()
+			if self.SearchBar then
+				local box = self.SearchBar:FindFirstChildOfClass("TextBox")
+				if box then box.Text = "" box:ReleaseFocus() end
+			end
+			self:_closeSearch()
+		end)
+	end
+end
+
+function Library:_closeSearch()
+	self:_hideSearchPage()
+	if self.SearchBar and self._collapseSearch then self._collapseSearch() end
+end
+
 function Library:_jumpTo(entry)
 	self:_resolveTabName(entry)
 	local target = entry.realTab
@@ -1546,11 +1810,14 @@ function Library:_jumpTo(entry)
 			if t.Page and entry.frame:IsDescendantOf(t.Page) then target = t break end
 		end
 	end
-	if target then self:SelectTab(target) end
+	self._searchActive = false
+	self.SearchPage.Visible = false
 	if self.SearchBar then
 		local box = self.SearchBar:FindFirstChildOfClass("TextBox")
 		if box then box.Text = "" box:ReleaseFocus() end
+		if self._collapseSearch then self._collapseSearch() end
 	end
+	if target then self:SelectTab(target) end
 	task.delay(0.25, function()
 		local frame = entry.frame
 		if not frame or not frame.Parent then return end
@@ -1626,7 +1893,10 @@ function Library:AddTab(name, tabOpts)
 	button.MouseLeave:Connect(function()
 		if self.ActiveTab ~= tab then tween(button, 0.2, { TextColor3 = THEME.SubText }) end
 	end)
-	button.Activated:Connect(function() self:SelectTab(tab) end)
+	button.Activated:Connect(function()
+		if self.Minimized then self:SetMinimized(false) end
+		self:SelectTab(tab)
+	end)
 
 	table.insert(self.Tabs, tab)
 	if not self.ActiveTab then self:SelectTab(tab, true) end
@@ -1634,6 +1904,15 @@ function Library:AddTab(name, tabOpts)
 end
 
 function Library:SelectTab(tab, instant)
+	if self._searchActive then
+		self._searchActive = false
+		self.SearchPage.Visible = false
+		if self.SearchBar then
+			local box = self.SearchBar:FindFirstChildOfClass("TextBox")
+			if box then box.Text = "" box:ReleaseFocus() end
+			if self._collapseSearch then self._collapseSearch() end
+		end
+	end
 	local previous = self.ActiveTab
 	if previous == tab then return end
 	self.ActiveTab = tab
@@ -1675,6 +1954,13 @@ function Library:SelectTab(tab, instant)
 		page.Position = UDim2.fromOffset(24 * dir, 0)
 		tween(page, t, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) })
 	end
+
+	for _, fn in ipairs(self.TabListeners or {}) do task.spawn(fn, tab) end
+end
+
+function Library:OnTabChanged(fn)
+	self.TabListeners = self.TabListeners or {}
+	table.insert(self.TabListeners, fn)
 end
 
 function Tab:_nextOrder()
@@ -2028,6 +2314,7 @@ function Tab:AddToggle(opts)
 	if hasKey then inset = 110 end
 	if hasDrop then inset = 164 end
 	if hasChip then inset = 110 end
+	if hasChip and hasKey then inset = 170 end
 
 	if sliderOpts then
 		label({
@@ -2236,10 +2523,12 @@ function Tab:AddToggle(opts)
 
 	if hasChip then
 		local chipState = opts.ChipDefault == true
+		local chipX = hasKey and -110 or -60
+		local chipW = type(opts.Chip) == "string" and (#opts.Chip > 3) and (18 + #opts.Chip * 6) or 42
 		local chip = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -60, 0.5, 0),
-			Size = UDim2.fromOffset(42, 20),
+			Position = UDim2.new(1, chipX, 0.5, 0),
+			Size = UDim2.fromOffset(chipW, 20),
 			BackgroundColor3 = chipState and self.Accent or THEME.Switch,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
@@ -2293,10 +2582,10 @@ function Tab:AddToggle(opts)
 		local arr
 		if arrUseIcon then
 			arr = new("ImageLabel", {
-				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -7, 0.5, 0),
-				Size = UDim2.fromOffset(16, 10), BackgroundTransparency = 1,
+				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -5, 0.5, 0),
+				Size = UDim2.fromOffset(22, 14), BackgroundTransparency = 1,
 				ScaleType = Enum.ScaleType.Fit,
-				Image = ICONS.Arrow, ImageColor3 = THEME.SubText, ZIndex = 8, Parent = box,
+				Image = ICONS.Arrow, ImageColor3 = THEME.Body, ZIndex = 8, Parent = box,
 			})
 		else
 			arr = label({
@@ -2366,7 +2655,7 @@ function Tab:AddToggle(opts)
 			list.Visible = open
 			playSound(SOUND_CLICK, 0.2, open and 1.05 or 0.95)
 			if arrUseIcon then
-				tween(arr, 0.25, { Rotation = open and 180 or 0, ImageColor3 = open and THEME.Text or THEME.SubText })
+				tween(arr, 0.25, { Rotation = open and 180 or 0, ImageColor3 = open and THEME.Text or THEME.Body })
 			else
 				tween(arr, 0.25, { Rotation = open and 180 or 0, TextColor3 = open and THEME.Text or THEME.SubText })
 			end
@@ -2649,10 +2938,10 @@ function Tab:AddButton(opts)
 	local arrowImg
 	if useArrowIcon then
 		arrowImg = new("ImageLabel", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.5, -1),
-			Size = UDim2.fromOffset(16, 10), BackgroundTransparency = 1, Rotation = -90,
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -15, 0.5, -1),
+			Size = UDim2.fromOffset(20, 13), BackgroundTransparency = 1, Rotation = -90,
 			ScaleType = Enum.ScaleType.Fit,
-			Image = ICONS.Arrow, ImageColor3 = THEME.SubText, ZIndex = 4, Parent = frame,
+			Image = ICONS.Arrow, ImageColor3 = THEME.Body, ZIndex = 4, Parent = frame,
 		})
 		arrow:GetPropertyChangedSignal("TextColor3"):Connect(function() arrowImg.ImageColor3 = arrow.TextColor3 end)
 		arrow:GetPropertyChangedSignal("Position"):Connect(function() arrowImg.Position = arrow.Position end)
@@ -2721,10 +3010,10 @@ function Tab:AddDropdown(opts)
 	local arrow
 	if arrowUseIcon then
 		arrow = new("ImageLabel", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0, HEADER / 2),
-			Size = UDim2.fromOffset(18, 12), BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0, HEADER / 2),
+			Size = UDim2.fromOffset(24, 16), BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Fit,
-			Image = ICONS.Arrow, ImageColor3 = THEME.SubText, ZIndex = 4, Parent = frame,
+			Image = ICONS.Arrow, ImageColor3 = THEME.Body, ZIndex = 4, Parent = frame,
 		})
 	else
 		arrow = label({
@@ -2805,7 +3094,7 @@ function Tab:AddDropdown(opts)
 			if id == openId and not isOpen then list.Visible = false end
 		end)
 		if arrowUseIcon then
-			tween(arrow, 0.3, { Rotation = isOpen and 180 or 0, ImageColor3 = isOpen and THEME.Text or THEME.SubText })
+			tween(arrow, 0.3, { Rotation = isOpen and 180 or 0, ImageColor3 = isOpen and THEME.Text or THEME.Body })
 		else
 			tween(arrow, 0.3, { Rotation = isOpen and 180 or 0, TextColor3 = isOpen and THEME.Text or THEME.SubText })
 		end
@@ -3595,6 +3884,172 @@ function Tab:AddInput(opts)
 		end
 		if isSearch and box.Text == "" then setSearch(false) end
 	end)
+
+	function api:Reset()
+		box.Text = ""
+		if picker then picker.Visible = false end
+		if box:IsFocused() then box:ReleaseFocus() end
+		if isSearch then setSearch(false) end
+	end
+	return api
+end
+
+function Tab:AddPlayerSearch(opts)
+	opts = opts or {}
+	local Players = game:GetService("Players")
+	local HEADER, ROW_H = 40, 40
+
+	local frame = elementFrame(self, HEADER)
+	frame.ClipsDescendants = true
+
+	local box = new("TextBox", {
+		Position = UDim2.new(0, 12, 0, 8),
+		Size = UDim2.new(1, -46, 0, 24),
+		BackgroundColor3 = THEME.Card,
+		BackgroundTransparency = 0.92,
+		ClearTextOnFocus = false,
+		Font = FONT,
+		TextSize = 12,
+		TextColor3 = THEME.Text,
+		PlaceholderText = opts.Placeholder or "Search a player...",
+		PlaceholderColor3 = THEME.Muted,
+		Text = "",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 6,
+		Parent = frame,
+	}, { corner(6), stroke(Color3.new(1, 1, 1), 0.85), pad(0, 8, 0, 8) })
+	local boxStroke = box:FindFirstChildOfClass("UIStroke")
+
+	local searchBtn = new("TextButton", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 8),
+		Size = UDim2.fromOffset(24, 24),
+		BackgroundColor3 = THEME.Card,
+		BackgroundTransparency = 0.92,
+		AutoButtonColor = false,
+		Text = "",
+		ZIndex = 7,
+		Parent = frame,
+	}, { corner(6), stroke(Color3.new(1, 1, 1), 0.85) })
+	local useSearchIcon = type(ICONS.Search) == "string" and ICONS.Search ~= ""
+	if useSearchIcon then
+		new("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1,
+			Image = ICONS.Search, ImageColor3 = THEME.Body, ZIndex = 8, Parent = searchBtn,
+		})
+	else
+		label({
+			Text = "⌕", Font = FONT_BOLD, TextSize = 16, TextColor3 = THEME.Body,
+			Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center,
+			ZIndex = 8, Parent = searchBtn,
+		})
+	end
+
+	local listHolder = new("Frame", {
+		Position = UDim2.new(0, 10, 0, HEADER),
+		Size = UDim2.new(1, -20, 0, 0),
+		BackgroundTransparency = 1,
+		ZIndex = 5,
+		Parent = frame,
+	}, {
+		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
+		new("UIPadding", { PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 8) }),
+	})
+
+	local open = false
+	local api = {}
+
+	local function rebuild(query)
+		for _, c in ipairs(listHolder:GetChildren()) do
+			if c:IsA("TextButton") then c:Destroy() end
+		end
+		query = (query or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+		local shown = 0
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= game:GetService("Players").LocalPlayer then
+				local hitName = p.Name:lower():find(query, 1, true)
+				local hitDisp = p.DisplayName:lower():find(query, 1, true)
+				if (query == "" or hitName or hitDisp) and shown < 20 then
+					shown += 1
+					local row = new("TextButton", {
+						Size = UDim2.new(1, 0, 0, ROW_H),
+						BackgroundColor3 = THEME.Card,
+						BackgroundTransparency = CARD_T,
+						AutoButtonColor = false,
+						Text = "",
+						LayoutOrder = shown,
+						ZIndex = 6,
+						Parent = listHolder,
+					}, { corner(7), stroke(Color3.new(1, 1, 1), 0.92) })
+					local pfp = new("ImageLabel", {
+						AnchorPoint = Vector2.new(0, 0.5),
+						Position = UDim2.new(0, 6, 0.5, 0),
+						Size = UDim2.fromOffset(28, 28),
+						BackgroundColor3 = THEME.Switch,
+						ZIndex = 7,
+						Parent = row,
+					}, { round(), stroke(Color3.new(1, 1, 1), 0.85) })
+					task.spawn(function()
+						local ok, img = pcall(function()
+							return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+						end)
+						if ok and pfp.Parent then pfp.Image = img end
+					end)
+					label({
+						Text = p.DisplayName, Font = FONT_MEDIUM, TextSize = 13, TextColor3 = THEME.Text,
+						Position = UDim2.fromOffset(42, 5), Size = UDim2.new(1, -52, 0, 16),
+						TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
+					})
+					label({
+						Text = "@" .. p.Name, TextSize = 11, TextColor3 = THEME.SubText,
+						Position = UDim2.fromOffset(42, 21), Size = UDim2.new(1, -52, 0, 13),
+						TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
+					})
+					row.MouseEnter:Connect(function() tween(row, 0.12, { BackgroundTransparency = CARD_HOVER_T }) end)
+					row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = CARD_T }) end)
+					row.Activated:Connect(function()
+						fire(opts.Callback, p)
+						api:Close()
+					end)
+				end
+			end
+		end
+		local listH = shown * (ROW_H + 4) + 10
+		listHolder.Size = UDim2.new(1, -20, 0, listH)
+		return listH
+	end
+
+	function api:Open()
+		if open then return end
+		open = true
+		local listH = rebuild(box.Text)
+		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER + listH) }, Enum.EasingStyle.Quint)
+		tween(boxStroke, 0.2, { Transparency = 0.4 })
+		playSound(SOUND_CLICK, 0.2, 1.05)
+	end
+	function api:Close()
+		if not open then return end
+		open = false
+		box.Text = ""
+		if box:IsFocused() then box:ReleaseFocus() end
+		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER) }, Enum.EasingStyle.Quint)
+		tween(boxStroke, 0.2, { Transparency = 0.85 })
+	end
+	function api:Toggle() if open then api:Close() else api:Open() end end
+
+	searchBtn.Activated:Connect(function() api:Toggle() end)
+	box.Focused:Connect(function() api:Open() end)
+	box:GetPropertyChangedSignal("Text"):Connect(function()
+		if open then
+			local listH = rebuild(box.Text)
+			tween(frame, 0.15, { Size = UDim2.new(1, 0, 0, HEADER + listH) })
+		end
+	end)
+	searchBtn.MouseEnter:Connect(function() tween(searchBtn, 0.15, { BackgroundTransparency = 0.86 }) end)
+	searchBtn.MouseLeave:Connect(function() tween(searchBtn, 0.15, { BackgroundTransparency = 0.92 }) end)
+
 	return api
 end
 
