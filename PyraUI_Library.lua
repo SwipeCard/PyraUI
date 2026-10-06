@@ -444,6 +444,9 @@ function Library.new(config)
 	self.Minimized = false
 	self.ScaleMultiplier = 1
 	self.Connections = {}
+	-- SessionStart: optional Unix epoch (os.time) so the timer can survive server hops.
+	-- When given, elapsed is measured from wall-clock time instead of os.clock().
+	self.SessionStart = (type(config.SessionStart) == "number" and config.SessionStart > 0) and config.SessionStart or nil
 	self.IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 	self.AcrylicEnabled = not self.IsMobile
 	self.WorldDimEnabled = true
@@ -632,11 +635,11 @@ function Library.new(config)
 		Position = UDim2.new(1, -78, 0.5, 0),
 		Size = UDim2.fromOffset(COLLAPSED, 28),
 		BackgroundColor3 = THEME.Card,
-		-- visible box when collapsed, matching the close/minimize dock buttons
-		BackgroundTransparency = 0.92,
+		-- collapsed look matches the minimize/close dock buttons: transparent at rest, reveals on hover
+		BackgroundTransparency = 1,
 		ZIndex = 8,
 		Parent = self.Dock,
-	}, { corner(8), stroke(Color3.new(1, 1, 1), 0.86) })
+	}, { corner(8), stroke(Color3.new(1, 1, 1), 1) })
 	local searchStroke = search:FindFirstChildOfClass("UIStroke")
 	local useSearchIcon = type(ICONS.Search) == "string" and ICONS.Search ~= ""
 	-- collapsed: icon centered in the box; expanded: icon tucked to the right
@@ -696,15 +699,25 @@ function Library.new(config)
 			searchBox.Text = ""
 			searchBox.TextEditable = false
 			searchBox.Visible = false
-			-- keep the box visible when collapsed (don't fade it out)
-			tween(search, 0.3, { Size = UDim2.fromOffset(COLLAPSED, 28), BackgroundTransparency = 0.92 }, Enum.EasingStyle.Quint)
-			tween(searchStroke, 0.3, { Transparency = 0.86, Color = Color3.new(1, 1, 1) })
+			-- collapse back to the transparent dock-button look
+			tween(search, 0.3, { Size = UDim2.fromOffset(COLLAPSED, 28), BackgroundTransparency = 1 }, Enum.EasingStyle.Quint)
+			tween(searchStroke, 0.3, { Transparency = 1, Color = Color3.new(1, 1, 1) })
 			tween(icon, 0.2, { TextColor3 = THEME.SubText, Position = ICON_COLLAPSED_POS })
 			if searchImg then tween(searchImg, 0.2, { Position = ICON_COLLAPSED_POS }) end
 			self:_hideSearchPage()
 		end
 	end
 	self._collapseSearch = function() setSearch(false) end
+
+	-- hover reveal while collapsed, exactly like the minimize/close buttons
+	iconBtn.MouseEnter:Connect(function()
+		if not searchOpen then tween(search, 0.2, { BackgroundTransparency = 0.9 }) end
+		if icon then tween(icon, 0.2, { TextColor3 = THEME.Text }) end
+	end)
+	iconBtn.MouseLeave:Connect(function()
+		if not searchOpen then tween(search, 0.2, { BackgroundTransparency = 1 }) end
+		if icon then tween(icon, 0.2, { TextColor3 = THEME.SubText }) end
+	end)
 
 	iconBtn.Activated:Connect(function()
 		if self.Minimized then self:SetMinimized(false) end
@@ -822,8 +835,8 @@ function Library.new(config)
 	if useDiamond then
 		diamond = new("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0, 55, 0.5, 9),
-			Size = UDim2.fromOffset(11, 11),
+			Position = UDim2.new(0, 58, 0.5, 9),
+			Size = UDim2.fromOffset(16, 16),
 			BackgroundTransparency = 1,
 			Image = ICONS.Diamond,
 			ImageColor3 = THEME.Accent,
@@ -856,7 +869,7 @@ function Library.new(config)
 	label({
 		Text = "P R E M I U M", Font = FONT_BOLD, TextSize = 9, TextColor3 = THEME.Accent,
 		TextTransparency = 0.25,
-		Position = UDim2.new(0, 64, 0.5, 3), Size = UDim2.fromOffset(0, 12),
+		Position = UDim2.new(0, 70, 0.5, 3), Size = UDim2.fromOffset(0, 12),
 		AutomaticSize = Enum.AutomaticSize.X, ZIndex = 3, Parent = self.Footer,
 	})
 
@@ -936,7 +949,14 @@ function Library.new(config)
 			frameCount, frameClock = 0, now
 			local ok, ping = pcall(function() return player:GetNetworkPing() end)
 			pingValue.Text = ok and (math.floor(ping * 1000 + 0.5) .. " ms") or "-- ms"
-			local e = math.floor(now - sessionStart)
+			-- if a persistent SessionStart epoch was passed, measure from wall-clock so the
+			-- timer keeps counting across server hops; otherwise fall back to this run's clock
+			local e
+			if self.SessionStart then
+				e = math.max(0, math.floor(os.time() - self.SessionStart))
+			else
+				e = math.floor(now - sessionStart)
+			end
 			sessionValue.Text = string.format("%02d:%02d:%02d", e // 3600, (e % 3600) // 60, e % 60)
 			task.wait(0.75)
 		end
@@ -1148,11 +1168,12 @@ function Library:SetMinimized(state)
 	if state == self.Minimized then return end
 	self.Minimized = state
 	-- never set .Text here (it used to overlay a stray "+"/"-" on top of the icon).
-	-- when minimized, show the Arrow icon (pointing down = "expand"); otherwise the Minimize icon.
+	-- when minimized, show the Close icon tilted 45 degrees so it reads as a "+" (expand);
+	-- otherwise the normal Minimize icon.
 	if self.MinButtonIcon then
 		if state then
-			self.MinButtonIcon.Image = ICONS.Arrow
-			self.MinButtonIcon.Rotation = 0
+			self.MinButtonIcon.Image = ICONS.Close
+			self.MinButtonIcon.Rotation = 45
 		else
 			self.MinButtonIcon.Image = ICONS.Minimize
 			self.MinButtonIcon.Rotation = 0
@@ -1461,8 +1482,8 @@ function Library:CreateSidePanel(opts)
 		root.ZIndex = 0
 		root.Position = DOCK_HIDDEN
 		root.GroupTransparency = 1
-		tween(root, 0.5, { Position = DOCK_SHOWN }, Enum.EasingStyle.Quint)
-		tween(root, 0.4, { GroupTransparency = 0 }, Enum.EasingStyle.Quad)
+		local SHOW = TweenInfo.new(0.42, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+		TweenService:Create(root, SHOW, { Position = DOCK_SHOWN, GroupTransparency = 0 }):Play()
 	end
 	function panel:Hide()
 		if detached then return end
@@ -1470,9 +1491,11 @@ function Library:CreateSidePanel(opts)
 		shown = false
 		showTok += 1
 		local tok = showTok
-		tween(root, 0.45, { Position = DOCK_HIDDEN }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-		tween(root, 0.3, { GroupTransparency = 1 }, Enum.EasingStyle.Quad)
-		task.delay(0.45, function()
+		-- slide and fade together on the SAME curve/duration so it reads as one clean slide-off,
+		-- instead of fading to a ghost and then drifting (the old 0.3 fade / 0.45 slide mismatch)
+		local HIDE = TweenInfo.new(0.32, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		TweenService:Create(root, HIDE, { Position = DOCK_HIDDEN, GroupTransparency = 1 }):Play()
+		task.delay(0.32, function()
 			if tok == showTok and not shown and not detached then root.Visible = false end
 		end)
 	end
@@ -2944,15 +2967,16 @@ function Tab:AddToggle(opts)
 		}, { corner(5), stroke(Color3.new(1, 1, 1), 0.85) })
 		local sel = label({
 			Text = tostring(selected), Font = FONT_MEDIUM, TextSize = 11, TextColor3 = THEME.Text,
-			Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -24, 1, 0),
+			Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -22, 1, 0),
 			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 8, Parent = box,
 		})
 		local arrUseIcon = type(ICONS.Arrow) == "string" and ICONS.Arrow ~= ""
 		local arr
 		if arrUseIcon then
+			-- tighter box so the arrow sits next to the text instead of leaving a gap
 			arr = new("ImageLabel", {
-				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -5, 0.5, 0),
-				Size = UDim2.fromOffset(22, 14), BackgroundTransparency = 1,
+				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -7, 0.5, 0),
+				Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1,
 				ScaleType = Enum.ScaleType.Fit,
 				Image = ICONS.Arrow, ImageColor3 = THEME.Body, ZIndex = 8, Parent = box,
 			})
@@ -3903,15 +3927,12 @@ function Tab:AddRandomSlider(opts)
 	end
 
 	local FADE = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	-- fade ONLY the inner dots during the morph; the bar, knobs and label stay solid
 	local function fadeElems(targetT)
-		TweenService:Create(fill, FADE, { BackgroundTransparency = targetT }):Play()
-		TweenService:Create(knobA, FADE, { BackgroundTransparency = targetT }):Play()
-		TweenService:Create(knobB, FADE, { BackgroundTransparency = targetT }):Play()
 		for _, k in ipairs({ knobA, knobB }) do
 			local dot = k:FindFirstChildOfClass("Frame")
 			if dot then TweenService:Create(dot, FADE, { BackgroundTransparency = targetT }):Play() end
 		end
-		TweenService:Create(valueLabel, FADE, { TextTransparency = targetT }):Play()
 	end
 	local morphTok = 0
 	local api = {}
@@ -3925,25 +3946,25 @@ function Tab:AddRandomSlider(opts)
 		morphing = true
 		morphTok += 1
 		local tok = morphTok
+		-- fade the dots out, slide everything to the new layout, fade the dots back in
 		fadeElems(1)
-		task.delay(0.18, function()
+		local MT = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+		if randomize then
+			knobB.Visible = true
+			TweenService:Create(knobA, MT, { Position = UDim2.fromScale(pctOf(lo), 0.5) }):Play()
+			TweenService:Create(knobB, MT, { Position = UDim2.fromScale(pctOf(hi), 0.5) }):Play()
+			TweenService:Create(fill, MT, { Position = UDim2.fromScale(pctOf(lo), 0), Size = UDim2.fromScale(pctOf(hi) - pctOf(lo), 1) }):Play()
+			if not editing then valueLabel.Text = format(lo) .. suffix .. "  -  " .. format(hi) .. suffix end
+		else
+			TweenService:Create(knobA, MT, { Position = UDim2.fromScale(pctOf(val), 0.5) }):Play()
+			TweenService:Create(fill, MT, { Position = UDim2.fromScale(0, 0), Size = UDim2.fromScale(pctOf(val), 1) }):Play()
+			if not editing then valueLabel.Text = format(val) .. suffix end
+		end
+		task.delay(0.22, function()
 			if tok ~= morphTok then return end
-			if randomize then
-				knobB.Visible = true
-				knobA.Position = UDim2.fromScale(pctOf(lo), 0.5)
-				knobB.Position = UDim2.fromScale(pctOf(hi), 0.5)
-				fill.Position = UDim2.fromScale(pctOf(lo), 0)
-				fill.Size = UDim2.fromScale(pctOf(hi) - pctOf(lo), 1)
-				if not editing then valueLabel.Text = format(lo) .. suffix .. "  -  " .. format(hi) .. suffix end
-			else
-				knobA.Position = UDim2.fromScale(pctOf(val), 0.5)
-				fill.Position = UDim2.fromScale(0, 0)
-				fill.Size = UDim2.fromScale(pctOf(val), 1)
-				knobB.Visible = false
-				if not editing then valueLabel.Text = format(val) .. suffix end
-			end
+			if not randomize then knobB.Visible = false end
 			fadeElems(0)
-			task.delay(0.18, function()
+			task.delay(0.1, function()
 				if tok == morphTok then morphing = false end
 			end)
 		end)
