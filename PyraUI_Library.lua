@@ -51,7 +51,7 @@ local LOGO_ID = "rbxassetid://6023426921"
 local ICONS = {
 	Logo = "rbxassetid://6023426921",
 	Diamond = "",
-	Arrow = "",
+	Arrow = "rbxassetid://86644458913479",
 	Close = "",
 	Minimize = "",
 	Search = "",
@@ -1685,7 +1685,10 @@ local function hoverable(frame, target)
 	target.MouseLeave:Connect(function() tween(frame, 0.2, { BackgroundTransparency = rest }) end)
 end
 
-function Tab:AddGroup()
+function Tab:AddGroup(opts)
+	opts = opts or {}
+	local collapsible = opts.Collapsible == true
+
 	local container = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
@@ -1700,11 +1703,107 @@ function Tab:AddGroup()
 		stroke(Color3.new(1, 1, 1), 0.92),
 		new("UIListLayout", { Padding = UDim.new(0, 0), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
-	return setmetatable({
-		Window = self.Window, Container = container, Order = 0,
+
+	local proxy = setmetatable({
+		Window = self.Window, Order = 0,
 		Accent = self.Accent, AccentInverse = self.AccentInverse,
 		_rowMode = true,
 	}, Tab)
+	proxy.Container = container
+
+	if not collapsible then
+		return proxy
+	end
+
+	local head = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 1,
+		ZIndex = 3,
+		Parent = container,
+	}, { new("UIListLayout", { Padding = UDim.new(0, 0), SortOrder = Enum.SortOrder.LayoutOrder }) })
+
+	local body = new("Frame", {
+		Name = "Body",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		LayoutOrder = 2,
+		ZIndex = 3,
+		Parent = container,
+	}, { new("UIListLayout", { Padding = UDim.new(0, 0), SortOrder = Enum.SortOrder.LayoutOrder }) })
+
+	local inner = new("CanvasGroup", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		GroupTransparency = 1,
+		Position = UDim2.fromOffset(0, -8),
+		ZIndex = 3,
+		Parent = body,
+	}, { new("UIListLayout", { Padding = UDim.new(0, 0), SortOrder = Enum.SortOrder.LayoutOrder }) })
+
+	proxy.Container = head
+	proxy._collapseBody = body
+	proxy._collapseInner = inner
+
+	proxy.Body = setmetatable({
+		Window = self.Window, Order = 1, Container = inner,
+		Accent = self.Accent, AccentInverse = self.AccentInverse,
+		_rowMode = true,
+	}, Tab)
+
+	local expanded = true
+	local function measure()
+		local layout = inner:FindFirstChildOfClass("UIListLayout")
+		return layout and layout.AbsoluteContentSize.Y or 0
+	end
+
+	function proxy:SetExpanded(on, instant)
+		on = on ~= false
+		if on == expanded and not instant then return end
+		expanded = on
+		if on then
+			body.Visible = true
+			inner.Visible = true
+			local h = measure()
+			if instant then
+				body.Size = UDim2.new(1, 0, 0, 0)
+				body.AutomaticSize = Enum.AutomaticSize.Y
+				inner.Position = UDim2.fromOffset(0, 0)
+				inner.GroupTransparency = 0
+			else
+				body.AutomaticSize = Enum.AutomaticSize.None
+				body.Size = UDim2.new(1, 0, 0, 0)
+				tween(body, 0.3, { Size = UDim2.new(1, 0, 0, h) }, Enum.EasingStyle.Quint)
+				tween(inner, 0.3, { Position = UDim2.fromOffset(0, 0), GroupTransparency = 0 }, Enum.EasingStyle.Quint)
+				task.delay(0.3, function()
+					if expanded then body.AutomaticSize = Enum.AutomaticSize.Y end
+				end)
+			end
+		else
+			local h = measure()
+			body.AutomaticSize = Enum.AutomaticSize.None
+			body.Size = UDim2.new(1, 0, 0, h)
+			if instant then
+				body.Size = UDim2.new(1, 0, 0, 0)
+				inner.Position = UDim2.fromOffset(0, -8)
+				inner.GroupTransparency = 1
+				body.Visible = false
+			else
+				tween(body, 0.28, { Size = UDim2.new(1, 0, 0, 0) }, Enum.EasingStyle.Quint)
+				tween(inner, 0.28, { Position = UDim2.fromOffset(0, -8), GroupTransparency = 1 }, Enum.EasingStyle.Quint)
+				task.delay(0.28, function()
+					if not expanded then body.Visible = false end
+				end)
+			end
+		end
+	end
+
+	proxy:SetExpanded(opts.DefaultExpanded ~= false, true)
+	return proxy
 end
 
 local function titleBlock(parent, name, description, rightInset, iconId)
@@ -2156,11 +2255,21 @@ function Tab:AddToggle(opts)
 			Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -24, 1, 0),
 			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 8, Parent = box,
 		})
-		local arr = label({
-			Text = "▾", TextSize = 10, TextColor3 = THEME.SubText,
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
-			Size = UDim2.fromOffset(10, 10), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 8, Parent = box,
-		})
+		local arrUseIcon = type(ICONS.Arrow) == "string" and ICONS.Arrow ~= ""
+		local arr
+		if arrUseIcon then
+			arr = new("ImageLabel", {
+				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
+				Size = UDim2.fromOffset(10, 10), BackgroundTransparency = 1,
+				Image = ICONS.Arrow, ImageColor3 = THEME.SubText, ZIndex = 8, Parent = box,
+			})
+		else
+			arr = label({
+				Text = "▾", TextSize = 10, TextColor3 = THEME.SubText,
+				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
+				Size = UDim2.fromOffset(10, 10), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 8, Parent = box,
+			})
+		end
 		box.MouseEnter:Connect(function() if not isOpen then tween(box, 0.15, { BackgroundTransparency = 0.86 }) end end)
 		box.MouseLeave:Connect(function() if not isOpen then tween(box, 0.15, { BackgroundTransparency = 0.92 }) end end)
 
@@ -2221,7 +2330,11 @@ function Tab:AddToggle(opts)
 			frame.ClipsDescendants = not open
 			list.Visible = open
 			playSound(SOUND_CLICK, 0.2, open and 1.05 or 0.95)
-			tween(arr, 0.25, { Rotation = open and 180 or 0, TextColor3 = open and THEME.Text or THEME.SubText })
+			if arrUseIcon then
+				tween(arr, 0.25, { Rotation = open and 180 or 0, ImageColor3 = open and THEME.Text or THEME.SubText })
+			else
+				tween(arr, 0.25, { Rotation = open and 180 or 0, TextColor3 = open and THEME.Text or THEME.SubText })
+			end
 			tween(box, 0.2, { BackgroundTransparency = open and 0.86 or 0.92 })
 		end
 		function api:GetOption() return selected end
@@ -2502,7 +2615,7 @@ function Tab:AddButton(opts)
 	if useArrowIcon then
 		arrowImg = new("ImageLabel", {
 			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, -1),
-			Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(11, 11), BackgroundTransparency = 1, Rotation = -90,
 			Image = ICONS.Arrow, ImageColor3 = THEME.SubText, ZIndex = 4, Parent = frame,
 		})
 		arrow:GetPropertyChangedSignal("TextColor3"):Connect(function() arrowImg.ImageColor3 = arrow.TextColor3 end)
@@ -2568,11 +2681,21 @@ function Tab:AddDropdown(opts)
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -34, 0, 0), Size = UDim2.new(0.5, -34, 0, HEADER),
 		TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = frame,
 	})
-	local arrow = label({
-		Text = "▾", TextSize = 12, TextColor3 = THEME.SubText,
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0, HEADER / 2),
-		Size = UDim2.fromOffset(14, 14), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 4, Parent = frame,
-	})
+	local arrowUseIcon = type(ICONS.Arrow) == "string" and ICONS.Arrow ~= ""
+	local arrow
+	if arrowUseIcon then
+		arrow = new("ImageLabel", {
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0, HEADER / 2),
+			Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1,
+			Image = ICONS.Arrow, ImageColor3 = THEME.SubText, ZIndex = 4, Parent = frame,
+		})
+	else
+		arrow = label({
+			Text = "▾", TextSize = 12, TextColor3 = THEME.SubText,
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0, HEADER / 2),
+			Size = UDim2.fromOffset(14, 14), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 4, Parent = frame,
+		})
+	end
 	local header = new("TextButton", {
 		Size = UDim2.new(1, 0, 0, HEADER), BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = frame,
 	})
@@ -2644,7 +2767,11 @@ function Tab:AddDropdown(opts)
 		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, isOpen and fullHeight or HEADER) }).Completed:Connect(function()
 			if id == openId and not isOpen then list.Visible = false end
 		end)
-		tween(arrow, 0.3, { Rotation = isOpen and 180 or 0, TextColor3 = isOpen and THEME.Text or THEME.SubText })
+		if arrowUseIcon then
+			tween(arrow, 0.3, { Rotation = isOpen and 180 or 0, ImageColor3 = isOpen and THEME.Text or THEME.SubText })
+		else
+			tween(arrow, 0.3, { Rotation = isOpen and 180 or 0, TextColor3 = isOpen and THEME.Text or THEME.SubText })
+		end
 	end
 	function api:Set(option)
 		if option == selected then return end
@@ -3261,16 +3388,21 @@ end
 
 function Tab:AddInput(opts)
 	opts = opts or {}
+	local isSearch = opts.Search == true
+	local hasPicker = type(opts.PickerSource) == "function"
 	local frame = elementFrame(self, opts.Description and 50 or 38)
+	frame.ClipsDescendants = true
 	titleBlock(frame, opts.Name or "Input", opts.Description, 160)
 	self.Window:_index(self, frame, opts.Name or "Input", opts.Description)
 
+	local COLLAPSED, EXPANDED = 28, 170
+	local boxW = isSearch and COLLAPSED or 140
 	local box = new("TextBox", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.fromOffset(140, 24),
+		Size = UDim2.fromOffset(boxW, 24),
 		BackgroundColor3 = THEME.Card,
-		BackgroundTransparency = 0.94,
+		BackgroundTransparency = isSearch and 1 or 0.94,
 		ClearTextOnFocus = false,
 		Font = FONT,
 		TextSize = 12,
@@ -3280,12 +3412,60 @@ function Tab:AddInput(opts)
 		Text = tostring(opts.Default or ""),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextEditable = not isSearch,
 		ClipsDescendants = true,
 		ZIndex = 6,
 		Parent = frame,
-	}, { corner(6), stroke(Color3.new(1, 1, 1), 0.88), pad(0, 8, 0, 8) })
+	}, { corner(6), stroke(Color3.new(1, 1, 1), isSearch and 1 or 0.88), pad(0, isSearch and 30 or 8, 0, 8) })
 	local boxStroke = box:FindFirstChildOfClass("UIStroke")
 	hoverable(frame, frame)
+
+	local searchBtn, searchImg, searchGlyph
+	if isSearch then
+		searchBtn = new("TextButton", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -12, 0.5, 0),
+			Size = UDim2.fromOffset(24, 24),
+			BackgroundTransparency = 1,
+			AutoButtonColor = false,
+			Text = "",
+			ZIndex = 8,
+			Parent = frame,
+		})
+		local useIcon = type(ICONS.Search) == "string" and ICONS.Search ~= ""
+		if useIcon then
+			searchImg = new("ImageLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(15, 15), BackgroundTransparency = 1,
+				Image = ICONS.Search, ImageColor3 = THEME.SubText, ZIndex = 9, Parent = searchBtn,
+			})
+		else
+			searchGlyph = label({
+				Text = "⌕", Font = FONT_BOLD, TextSize = 17, TextColor3 = THEME.SubText,
+				Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center,
+				ZIndex = 9, Parent = searchBtn,
+			})
+		end
+	end
+
+	local picker
+	if hasPicker then
+		picker = new("Frame", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -12, 0, (opts.Description and 50 or 38) - 6),
+			Size = UDim2.fromOffset(EXPANDED, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundColor3 = THEME.Glass,
+			BackgroundTransparency = SOLID_T,
+			BorderSizePixel = 0,
+			Visible = false,
+			ZIndex = 30,
+			Parent = frame,
+		}, {
+			corner(8), stroke(Color3.new(1, 1, 1), 0.86), pad(5, 5, 5, 5),
+			new("UIListLayout", { Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }),
+		})
+	end
 
 	local api = {}
 	function api:Set(text)
@@ -3294,18 +3474,89 @@ function Tab:AddInput(opts)
 	end
 	function api:Get() return box.Text end
 
+	local function clearPicker()
+		if not picker then return end
+		for _, c in ipairs(picker:GetChildren()) do
+			if c:IsA("TextButton") then c:Destroy() end
+		end
+	end
+	local function runPicker()
+		if not picker then return end
+		clearPicker()
+		local q = box.Text:gsub("^%s+", ""):gsub("%s+$", ""):lower()
+		local source = opts.PickerSource() or {}
+		local shown = 0
+		for i, entry in ipairs(source) do
+			local lbl = type(entry) == "table" and entry.label or tostring(entry)
+			if (q == "" or lbl:lower():find(q, 1, true)) and shown < 6 then
+				shown += 1
+				local b = new("TextButton", {
+					Size = UDim2.new(1, 0, 0, 26),
+					BackgroundColor3 = THEME.Card, BackgroundTransparency = 0.94,
+					AutoButtonColor = false, Text = "", LayoutOrder = shown, ZIndex = 31, Parent = picker,
+				}, { corner(5) })
+				label({
+					Text = lbl, Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text,
+					Position = UDim2.fromOffset(9, 0), Size = UDim2.new(1, -16, 1, 0),
+					TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 32, Parent = b,
+				})
+				b.MouseEnter:Connect(function() tween(b, 0.12, { BackgroundTransparency = 0.88 }) end)
+				b.MouseLeave:Connect(function() tween(b, 0.12, { BackgroundTransparency = 0.94 }) end)
+				b.Activated:Connect(function()
+					box.Text = lbl
+					picker.Visible = false
+					fire(opts.PickerCallback or opts.Callback, entry)
+				end)
+			end
+		end
+		picker.Visible = shown > 0
+	end
+
+	local searchOpen = false
+	local function setSearch(open)
+		if not isSearch then return end
+		if open == searchOpen then return end
+		searchOpen = open
+		if open then
+			box.TextEditable = true
+			tween(box, 0.3, { Size = UDim2.fromOffset(EXPANDED, 24), BackgroundTransparency = 0.92 }, Enum.EasingStyle.Quint)
+			tween(boxStroke, 0.3, { Transparency = 0.82 })
+			task.delay(0.1, function() if searchOpen then box:CaptureFocus() end end)
+			playSound(SOUND_CLICK, 0.22, 1.1)
+		else
+			box.TextEditable = false
+			tween(box, 0.3, { Size = UDim2.fromOffset(COLLAPSED, 24), BackgroundTransparency = 1 }, Enum.EasingStyle.Quint)
+			tween(boxStroke, 0.3, { Transparency = 1 })
+			if picker then picker.Visible = false end
+		end
+	end
+	if isSearch then
+		searchBtn.Activated:Connect(function()
+			if searchOpen then box:CaptureFocus() else setSearch(true) end
+		end)
+	end
+
 	box.Focused:Connect(function()
 		tween(boxStroke, 0.2, { Transparency = 0.4 })
-		tween(box, 0.2, { BackgroundTransparency = 0.9 })
+		if not isSearch then tween(box, 0.2, { BackgroundTransparency = 0.9 }) end
+		if hasPicker then runPicker() end
 	end)
+	if hasPicker then
+		box:GetPropertyChangedSignal("Text"):Connect(function()
+			if box:IsFocused() then runPicker() end
+		end)
+	end
 	box.FocusLost:Connect(function(enter)
-		tween(boxStroke, 0.2, { Transparency = 0.88 })
-		tween(box, 0.2, { BackgroundTransparency = 0.94 })
+		tween(boxStroke, 0.2, { Transparency = isSearch and (searchOpen and 0.82 or 1) or 0.88 })
+		if not isSearch then tween(box, 0.2, { BackgroundTransparency = 0.94 }) end
+		task.wait(0.15)
+		if picker and not picker.Visible then else if picker then picker.Visible = false end end
 		if opts.Numeric and not tonumber(box.Text) then
 			box.Text = tostring(opts.Default or "")
-			return
+		elseif enter or not opts.EnterOnly then
+			fire(opts.Callback, box.Text)
 		end
-		if enter or not opts.EnterOnly then fire(opts.Callback, box.Text) end
+		if isSearch and box.Text == "" then setSearch(false) end
 	end)
 	return api
 end
