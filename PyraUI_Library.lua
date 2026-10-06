@@ -50,14 +50,14 @@ local LOGO_ID = "rbxassetid://6023426921"
 
 local ICONS = {
 	Logo = "rbxassetid://6023426921",
-	Diamond = "rbxassetid://135010826045493",
+	Diamond = "rbxassetid://89788278732735",
 	Arrow = "rbxassetid://86644458913479",
 	Close = "rbxassetid://71379270081112",
 	Minimize = "rbxassetid://95004752241443",
-	Search = "rbxassetid://98893121141113",
+	Search = "rbxassetid://129236045938066",
 	Settings = "rbxassetid://110768919221533",
 	Spectate = "rbxassetid://137427491983393",
-	Pin = "rbxassetid://129283132557583",
+	Pin = "rbxassetid://102761078072952",
 	Spectate_Selected = "rbxassetid://77306507937998",
 	Pin_Selected = "rbxassetid://135812284323262",
 	Warning = "rbxassetid://90951955041815",
@@ -618,6 +618,7 @@ function Library.new(config)
 	end
 	local closeButton = dockButton("×", -8, ICONS.Close)
 	self.MinButton = dockButton("-", -40, ICONS.Minimize)
+	self.MinButtonIcon = self.MinButton:FindFirstChildOfClass("ImageLabel")
 	closeButton.Activated:Connect(function() self:Hide() end)
 	self.MinButton.Activated:Connect(function() self:SetMinimized(not self.Minimized) end)
 
@@ -630,24 +631,28 @@ function Library.new(config)
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -78, 0.5, 0),
 		Size = UDim2.fromOffset(COLLAPSED, 28),
-		BackgroundColor3 = THEME.Glass,
-		BackgroundTransparency = 1,
+		BackgroundColor3 = THEME.Card,
+		-- visible box when collapsed, matching the close/minimize dock buttons
+		BackgroundTransparency = 0.92,
 		ZIndex = 8,
 		Parent = self.Dock,
-	}, { corner(8), stroke(Color3.new(1, 1, 1), 1) })
+	}, { corner(8), stroke(Color3.new(1, 1, 1), 0.86) })
 	local searchStroke = search:FindFirstChildOfClass("UIStroke")
 	local useSearchIcon = type(ICONS.Search) == "string" and ICONS.Search ~= ""
+	-- collapsed: icon centered in the box; expanded: icon tucked to the right
+	local ICON_COLLAPSED_POS = UDim2.new(0.5, 0, 0.5, 0)
+	local ICON_EXPANDED_POS = UDim2.new(1, -6, 0.5, 0)
 	local icon = label({
-		Text = useSearchIcon and "" or "⌕", Font = FONT_BOLD, TextSize = 18, TextColor3 = THEME.SubText,
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0),
-		Size = UDim2.fromOffset(18, 24), TextXAlignment = Enum.TextXAlignment.Center,
+		Text = useSearchIcon and "" or "⌕", Font = FONT_BOLD, TextSize = 20, TextColor3 = THEME.SubText,
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = ICON_COLLAPSED_POS,
+		Size = UDim2.fromOffset(22, 24), TextXAlignment = Enum.TextXAlignment.Center,
 		ZIndex = 9, Parent = search,
 	})
 	local searchImg
 	if useSearchIcon then
 		searchImg = new("ImageLabel", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0),
-			Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = ICON_COLLAPSED_POS,
+			Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Search, ImageColor3 = THEME.Body, ZIndex = 9, Parent = search,
 		})
 		icon:GetPropertyChangedSignal("TextColor3"):Connect(function()
@@ -683,16 +688,19 @@ function Library.new(config)
 			searchBox.TextEditable = true
 			tween(search, 0.3, { Size = UDim2.fromOffset(EXPANDED, 28), BackgroundTransparency = 0.92 }, Enum.EasingStyle.Quint)
 			tween(searchStroke, 0.3, { Transparency = 0.82 })
-			tween(icon, 0.2, { TextColor3 = THEME.Text })
+			tween(icon, 0.2, { TextColor3 = THEME.Text, Position = ICON_EXPANDED_POS })
+			if searchImg then tween(searchImg, 0.2, { Position = ICON_EXPANDED_POS }) end
 			task.delay(0.12, function() if searchOpen then searchBox:CaptureFocus() end end)
 			playSound(SOUND_CLICK, 0.22, 1.1)
 		else
 			searchBox.Text = ""
 			searchBox.TextEditable = false
 			searchBox.Visible = false
-			tween(search, 0.3, { Size = UDim2.fromOffset(COLLAPSED, 28), BackgroundTransparency = 1 }, Enum.EasingStyle.Quint)
-			tween(searchStroke, 0.3, { Transparency = 1, Color = Color3.new(1, 1, 1) })
-			tween(icon, 0.2, { TextColor3 = THEME.SubText })
+			-- keep the box visible when collapsed (don't fade it out)
+			tween(search, 0.3, { Size = UDim2.fromOffset(COLLAPSED, 28), BackgroundTransparency = 0.92 }, Enum.EasingStyle.Quint)
+			tween(searchStroke, 0.3, { Transparency = 0.86, Color = Color3.new(1, 1, 1) })
+			tween(icon, 0.2, { TextColor3 = THEME.SubText, Position = ICON_COLLAPSED_POS })
+			if searchImg then tween(searchImg, 0.2, { Position = ICON_COLLAPSED_POS }) end
 			self:_hideSearchPage()
 		end
 	end
@@ -908,8 +916,9 @@ function Library.new(config)
 		})
 	end
 
-	local greenHex = STATUS_GREEN:ToHex()
-	self.StatusValue = chip("STATUS", string.format('<font color="#%s">●</font> %s', greenHex, config.Status or "Manual"))
+	self.StatusColor = (typeof(config.StatusColor) == "Color3") and config.StatusColor or STATUS_GREEN
+	local statusHex = self.StatusColor:ToHex()
+	self.StatusValue = chip("STATUS", string.format('<font color="#%s">●</font> %s', statusHex, config.Status or "Manual"))
 	self.ExpiryValue = chip("EXPIRES", config.Expiry or "12/21/2036")
 	local pingValue = chip("PING", "-- ms")
 	local fpsValue = chip("FPS", "--")
@@ -1138,7 +1147,17 @@ end
 function Library:SetMinimized(state)
 	if state == self.Minimized then return end
 	self.Minimized = state
-	self.MinButton.Text = state and "+" or "-"
+	-- never set .Text here (it used to overlay a stray "+"/"-" on top of the icon).
+	-- when minimized, show the Arrow icon (pointing down = "expand"); otherwise the Minimize icon.
+	if self.MinButtonIcon then
+		if state then
+			self.MinButtonIcon.Image = ICONS.Arrow
+			self.MinButtonIcon.Rotation = 0
+		else
+			self.MinButtonIcon.Image = ICONS.Minimize
+			self.MinButtonIcon.Rotation = 0
+		end
+	end
 
 	local fullH = DOCK_H + GAP + PANEL_H + GAP + FOOTER_H
 	local miniH = DOCK_H + GAP + FOOTER_H
@@ -1474,7 +1493,13 @@ function Library:CreateSidePanel(opts)
 		if opts.OnDetach then opts.OnDetach(true) end
 	end
 
+	-- cancel any in-flight Position tween on the panel; a leftover snap tween running after we
+	-- reparent/reposition was what flung the panel to the right edge on reattach
+	local function killPositionTween()
+		TweenService:Create(root, TweenInfo.new(0), { Position = root.Position }):Play()
+	end
 	local function dock()
+		killPositionTween()
 		root.Parent = win.Holder
 		root.AnchorPoint = Vector2.new(0, 0.5)
 		root.ZIndex = 0
@@ -1484,15 +1509,19 @@ function Library:CreateSidePanel(opts)
 		if str then tween(str, 0.2, { Color = Color3.new(1, 1, 1), Transparency = 0.88 }) end
 		if win.ActiveTab ~= panel._homeTab and not pinned then panel:Hide() end
 	end
+	local reattachTok = 0
 	local function reattach(instant)
 		if not detached then return end
 		detached = false
+		reattachTok += 1
+		local tok = reattachTok
 		if instant then
 			dock()
 		else
 			local home = worldHomePos()
 			tween(root, 0.25, { Position = UDim2.fromOffset(home.X, home.Y) }, Enum.EasingStyle.Quint).Completed:Connect(function()
-				if not detached then dock() end
+				-- only dock if this reattach is still the current one and we didn't re-detach
+				if not detached and tok == reattachTok then dock() end
 			end)
 		end
 		playSound(SOUND_CLICK, 0.3, 0.9)
@@ -1663,8 +1692,10 @@ function Library:AddMonitor(key, label_)
 	return item
 end
 
-function Library:SetStatus(text)
-	self.StatusValue.Text = string.format('<font color="#%s">●</font> %s', STATUS_GREEN:ToHex(), tostring(text))
+function Library:SetStatus(text, color)
+	if typeof(color) == "Color3" then self.StatusColor = color end
+	local hex = (self.StatusColor or STATUS_GREEN):ToHex()
+	self.StatusValue.Text = string.format('<font color="#%s">●</font> %s', hex, tostring(text))
 end
 
 function Library:SetExpiry(text)
@@ -1732,23 +1763,27 @@ function Library:Notify(title, text, durationOrOpts)
 		LayoutOrder = 1,
 		Parent = card,
 	})
+	-- BareIcon: drop the circular plate and let the icon fill the slot (used by warning toasts)
+	local bareIcon = opts.BareIcon == true
 	local avatar = new("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 0, 0.5, 0),
 		Size = UDim2.fromOffset(26, 26),
 		BackgroundColor3 = Color3.fromRGB(26, 26, 30),
+		BackgroundTransparency = bareIcon and 1 or 0,
 		BorderSizePixel = 0,
 		Parent = header,
-	}, { round(), stroke(Color3.new(1, 1, 1), 0.8) })
+	}, bareIcon and { } or { round(), stroke(Color3.new(1, 1, 1), 0.8) })
 	local notifIcon = (type(opts.Icon) == "string" and opts.Icon ~= "") and opts.Icon or LOGO_ID
 	local notifIconColor = (typeof(opts.IconColor) == "Color3") and opts.IconColor or THEME.Accent
 	new("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(15, 15),
+		Size = bareIcon and UDim2.fromOffset(24, 24) or UDim2.fromOffset(15, 15),
 		BackgroundTransparency = 1,
 		Image = notifIcon,
 		ImageColor3 = notifIconColor,
+		ScaleType = Enum.ScaleType.Fit,
 		Parent = avatar,
 	})
 	local nameRow = new("Frame", {
@@ -2428,18 +2463,20 @@ function Tab:AddSection(text, opts)
 		ZIndex = 4,
 		Parent = self.Container,
 	})
+	-- when there's an icon, vertically center the label on the icon instead of bottom-aligning
+	-- (bottom-align made the text look shifted relative to the icon)
 	local lbl = label({
 		Text = string.upper(text), Font = FONT_BOLD, TextSize = 10,
 		TextColor3 = opts.Color or (self.Accent == THEME.Accent and THEME.SubText or self.Accent),
 		Position = UDim2.fromOffset(0, 0),
 		Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X,
-		TextYAlignment = Enum.TextYAlignment.Bottom,
+		TextYAlignment = hasIcon and Enum.TextYAlignment.Center or Enum.TextYAlignment.Bottom,
 		ZIndex = 4, Parent = row,
 	})
 	if hasIcon then
 		local iconHolder = new("Frame", {
-			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, 0, 1, 0),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 0, 0.5, 0),
 			Size = UDim2.fromOffset(16, 16),
 			BackgroundTransparency = 1,
 			ZIndex = 4,
@@ -2630,8 +2667,8 @@ function Tab:AddToggle(opts)
 		--  a 32-wide icon therefore anchors at -16 to share that center line).
 		bigIcon = new("ImageLabel", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -16, 0.5, 0),
-			Size = UDim2.fromOffset(32, 32),
+			Position = UDim2.new(1, -15, 0.5, 0),
+			Size = UDim2.fromOffset(34, 34),
 			BackgroundTransparency = 1,
 			Image = opts.Icon,
 			ImageColor3 = THEME.SubText,
