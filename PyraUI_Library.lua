@@ -1381,12 +1381,14 @@ function Library:CreateSidePanel(opts)
 		task.delay(0.3, function() if not shown then root.Visible = false end end)
 	end
 	function panel:IsPinned() return pinned end
-	function panel:SetPinned(on)
-		pinned = on == true
-		local col = pinned and self.Accent or THEME.SubText
+	local function applyPin()
 		if pinImg then pinImg.ImageColor3 = pinned and THEME.Accent or THEME.SubText end
 		if pinGlyph then pinGlyph.TextTransparency = pinned and 0 or 0.4 end
 		tween(pinBtn, 0.2, { BackgroundTransparency = pinned and 0.85 or 1 })
+	end
+	function panel:SetPinned(on)
+		pinned = on == true
+		applyPin()
 		if opts.OnPin then opts.OnPin(pinned) end
 	end
 
@@ -1395,7 +1397,7 @@ function Library:CreateSidePanel(opts)
 	pinBtn.MouseLeave:Connect(function() if not pinned then tween(pinBtn, 0.15, { BackgroundTransparency = 1 }) end end)
 
 	panel.Root = root
-	panel:SetPinned(pinned)
+	applyPin()
 	return panel
 end
 
