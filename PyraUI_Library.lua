@@ -60,12 +60,27 @@ local ICONS = {
 	Pin = "rbxassetid://129283132557583",
 	Spectate_Selected = "rbxassetid://77306507937998",
 	Pin_Selected = "rbxassetid://135812284323262",
-	Warning = "",
+	Warning = "rbxassetid://90951955041815",
 }
 
 local function iconOrText(id, fallback)
 	return (type(id) == "string" and id ~= "" and id) or nil, fallback
 end
+
+task.spawn(function()
+	local ok, ContentProvider = pcall(function() return game:GetService("ContentProvider") end)
+	if not ok then return end
+	local assets = {}
+	for _, v in pairs(ICONS) do
+		if type(v) == "string" and v ~= "" then
+			local holder = Instance.new("ImageLabel")
+			holder.Image = v
+			table.insert(assets, holder)
+		end
+	end
+	pcall(function() ContentProvider:PreloadAsync(assets) end)
+	for _, a in ipairs(assets) do a:Destroy() end
+end)
 
 local WINDOW_W = 640
 local DOCK_H   = 44
@@ -573,7 +588,7 @@ function Library.new(config)
 			Font = FONT_MEDIUM,
 			TextSize = 17,
 			TextColor3 = THEME.SubText,
-			ZIndex = 4,
+			ZIndex = 12,
 			Parent = self.Dock,
 		}, { corner(8) })
 		local img
@@ -583,10 +598,11 @@ function Library.new(config)
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromOffset(18, 18),
 				BackgroundTransparency = 1,
+				ImageTransparency = 0,
 				Image = iconId,
-				ImageColor3 = THEME.Body,
+				ImageColor3 = THEME.SubText,
 				ScaleType = Enum.ScaleType.Fit,
-				ZIndex = 5,
+				ZIndex = 13,
 				Parent = b,
 			})
 		end
@@ -793,31 +809,46 @@ function Library.new(config)
 		Position = UDim2.new(0, 50, 0.5, -15), Size = UDim2.fromOffset(0, 16),
 		AutomaticSize = Enum.AutomaticSize.X, ZIndex = 3, Parent = self.Footer,
 	})
-	local diamond = new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0, 54, 0.5, 9),
-		Size = UDim2.fromOffset(6, 6),
-		Rotation = 45,
-		BackgroundColor3 = THEME.Accent,
-		BorderSizePixel = 0,
-		ZIndex = 3,
-		Parent = self.Footer,
-	}, {
-		corner(1),
-		new("UIGradient", {
-			Rotation = 90,
-			Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 150, 160)),
-		}),
-	})
-	TweenService:Create(
-		diamond,
-		TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-		{ BackgroundTransparency = 0.35 }
-	):Play()
+	local useDiamond = type(ICONS.Diamond) == "string" and ICONS.Diamond ~= ""
+	local diamond
+	if useDiamond then
+		diamond = new("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0, 55, 0.5, 9),
+			Size = UDim2.fromOffset(11, 11),
+			BackgroundTransparency = 1,
+			Image = ICONS.Diamond,
+			ImageColor3 = THEME.Accent,
+			ScaleType = Enum.ScaleType.Fit,
+			ZIndex = 3,
+			Parent = self.Footer,
+		})
+		TweenService:Create(
+			diamond,
+			TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+			{ ImageTransparency = 0.35 }
+		):Play()
+	else
+		diamond = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0, 54, 0.5, 9),
+			Size = UDim2.fromOffset(6, 6),
+			Rotation = 45,
+			BackgroundColor3 = THEME.Accent,
+			BorderSizePixel = 0,
+			ZIndex = 3,
+			Parent = self.Footer,
+		}, { corner(1) })
+		TweenService:Create(
+			diamond,
+			TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+			{ BackgroundTransparency = 0.35 }
+		):Play()
+	end
 	label({
 		Text = "P R E M I U M", Font = FONT_BOLD, TextSize = 9, TextColor3 = THEME.Accent,
 		TextTransparency = 0.25,
-		Position = UDim2.new(0, 62, 0.5, 3), Size = UDim2.fromOffset(0, 12),
+		Position = UDim2.new(0, 64, 0.5, 3), Size = UDim2.fromOffset(0, 12),
 		AutomaticSize = Enum.AutomaticSize.X, ZIndex = 3, Parent = self.Footer,
 	})
 
@@ -1286,7 +1317,7 @@ function Library:CreateSidePanel(opts)
 	local pinBtn = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.fromOffset(26, 26),
+		Size = UDim2.fromOffset(28, 28),
 		BackgroundColor3 = THEME.Card,
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
@@ -1299,7 +1330,7 @@ function Library:CreateSidePanel(opts)
 	if usePinIcon then
 		pinImg = new("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(17, 17), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromOffset(22, 22), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Pin, ImageColor3 = THEME.SubText, ZIndex = 5, Parent = pinBtn,
 		})
 	else
@@ -1477,7 +1508,6 @@ function Library:CreateSidePanel(opts)
 			pinImg.ImageColor3 = pinned and THEME.Accent or THEME.SubText
 		end
 		if pinGlyph then pinGlyph.TextTransparency = pinned and 0 or 0.4 end
-		tween(pinBtn, 0.2, { BackgroundTransparency = pinned and 0.85 or 1 })
 	end
 	function panel:SetPinned(on)
 		pinned = on == true
@@ -1486,8 +1516,8 @@ function Library:CreateSidePanel(opts)
 	end
 
 	pinBtn.Activated:Connect(function() panel:SetPinned(not pinned) end)
-	pinBtn.MouseEnter:Connect(function() if not pinned then tween(pinBtn, 0.15, { BackgroundTransparency = 0.9 }) end end)
-	pinBtn.MouseLeave:Connect(function() if not pinned then tween(pinBtn, 0.15, { BackgroundTransparency = 1 }) end end)
+	pinBtn.MouseEnter:Connect(function() if not pinned and pinImg then tween(pinImg, 0.15, { ImageColor3 = THEME.Text }) end end)
+	pinBtn.MouseLeave:Connect(function() if not pinned and pinImg then tween(pinImg, 0.15, { ImageColor3 = THEME.SubText }) end end)
 
 	local dragHandle = new("TextButton", {
 		Size = UDim2.fromScale(1, 1),
@@ -2570,6 +2600,7 @@ function Tab:AddToggle(opts)
 	if hasChip then inset = 110 end
 	if hasChip and hasKey then inset = 170 end
 
+	local iconToggle = opts.IconToggle == true and type(opts.Icon) == "string" and opts.Icon ~= ""
 	if sliderOpts then
 		label({
 			Text = opts.Name or "Toggle", Font = FONT_MEDIUM, TextSize = 13,
@@ -2584,30 +2615,45 @@ function Tab:AddToggle(opts)
 			})
 		end
 	else
-		titleBlock(frame, opts.Name or "Toggle", opts.Description, inset, opts.Icon)
+		titleBlock(frame, opts.Name or "Toggle", opts.Description, inset, (not iconToggle) and opts.Icon or nil)
 	end
 	self.Window:_index(self, frame, opts.Name or "Toggle", opts.Description)
 
-	local switchY = sliderOpts and UDim2.new(1, -12, 0, 16) or UDim2.new(1, -12, 0.5, 0)
-	local switchAnchor = sliderOpts and Vector2.new(1, 0.5) or Vector2.new(1, 0.5)
-	local switch = new("Frame", {
-		AnchorPoint = switchAnchor,
-		Position = switchY,
-		Size = UDim2.fromOffset(40, 22),
-		BackgroundColor3 = THEME.Switch,
-		BorderSizePixel = 0,
-		ZIndex = 4,
-		Parent = frame,
-	}, { round(), stroke(Color3.new(1, 1, 1), 0.9) })
-	local knob = new("Frame", {
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 3, 0.5, 0),
-		Size = UDim2.fromOffset(16, 16),
-		BackgroundColor3 = THEME.SubText,
-		BorderSizePixel = 0,
-		ZIndex = 5,
-		Parent = switch,
-	}, { round() })
+	local bigIcon
+	local switch, knob
+	if iconToggle then
+		bigIcon = new("ImageLabel", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -12, 0.5, 0),
+			Size = UDim2.fromOffset(28, 28),
+			BackgroundTransparency = 1,
+			Image = opts.Icon,
+			ImageColor3 = THEME.SubText,
+			ScaleType = Enum.ScaleType.Fit,
+			ZIndex = 4,
+			Parent = frame,
+		})
+	else
+		local switchY = sliderOpts and UDim2.new(1, -12, 0, 16) or UDim2.new(1, -12, 0.5, 0)
+		switch = new("Frame", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = switchY,
+			Size = UDim2.fromOffset(40, 22),
+			BackgroundColor3 = THEME.Switch,
+			BorderSizePixel = 0,
+			ZIndex = 4,
+			Parent = frame,
+		}, { round(), stroke(Color3.new(1, 1, 1), 0.9) })
+		knob = new("Frame", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 3, 0.5, 0),
+			Size = UDim2.fromOffset(16, 16),
+			BackgroundColor3 = THEME.SubText,
+			BorderSizePixel = 0,
+			ZIndex = 5,
+			Parent = switch,
+		}, { round() })
+	end
 	local hit = new("TextButton", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = frame,
 	})
@@ -2619,13 +2665,22 @@ function Tab:AddToggle(opts)
 	local function render(instant)
 		local t = instant and 0 or 0.28
 		local info = TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-		TweenService:Create(switch, info, { BackgroundColor3 = state and self.Accent or THEME.Switch }):Play()
-		TweenService:Create(knob, info, { BackgroundColor3 = state and self.AccentInverse or THEME.SubText }):Play()
-		TweenService:Create(
-			knob,
-			TweenInfo.new(t, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-			{ Position = state and UDim2.new(1, -19, 0.5, 0) or UDim2.new(0, 3, 0.5, 0) }
-		):Play()
+		if iconToggle then
+			if bigIcon then
+				if type(iconSel) == "string" and iconSel ~= "" then
+					bigIcon.Image = state and iconSel or iconBase
+				end
+				TweenService:Create(bigIcon, info, { ImageColor3 = state and self.Accent or THEME.SubText }):Play()
+			end
+		else
+			TweenService:Create(switch, info, { BackgroundColor3 = state and self.Accent or THEME.Switch }):Play()
+			TweenService:Create(knob, info, { BackgroundColor3 = state and self.AccentInverse or THEME.SubText }):Play()
+			TweenService:Create(
+				knob,
+				TweenInfo.new(t, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+				{ Position = state and UDim2.new(1, -19, 0.5, 0) or UDim2.new(0, 3, 0.5, 0) }
+			):Play()
+		end
 		if titleIcon and type(iconSel) == "string" and iconSel ~= "" then
 			titleIcon.Image = state and iconSel or (iconBase or iconSel)
 			titleIcon.ImageColor3 = state and self.Accent or THEME.Text
