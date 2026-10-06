@@ -1740,13 +1740,15 @@ function Library:Notify(title, text, durationOrOpts)
 		BorderSizePixel = 0,
 		Parent = header,
 	}, { round(), stroke(Color3.new(1, 1, 1), 0.8) })
+	local notifIcon = (type(opts.Icon) == "string" and opts.Icon ~= "") and opts.Icon or LOGO_ID
+	local notifIconColor = (typeof(opts.IconColor) == "Color3") and opts.IconColor or THEME.Accent
 	new("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(15, 15),
 		BackgroundTransparency = 1,
-		Image = LOGO_ID,
-		ImageColor3 = THEME.Accent,
+		Image = notifIcon,
+		ImageColor3 = notifIconColor,
 		Parent = avatar,
 	})
 	local nameRow = new("Frame", {
@@ -1764,6 +1766,7 @@ function Library:Notify(title, text, durationOrOpts)
 	})
 	label({
 		Text = tostring(title or "PYRA"), Font = FONT_BOLD, TextSize = 13,
+		TextColor3 = (typeof(opts.TitleColor) == "Color3") and opts.TitleColor or THEME.Text,
 		Size = UDim2.fromOffset(0, 16), AutomaticSize = Enum.AutomaticSize.X,
 		LayoutOrder = 1, Parent = nameRow,
 	})
@@ -2622,10 +2625,13 @@ function Tab:AddToggle(opts)
 	local bigIcon
 	local switch, knob
 	if iconToggle then
+		-- Bigger icon, and centered on the same vertical axis as the switch toggles
+		-- (switch is 40 wide anchored at -12, so its center sits at -32 from the right edge;
+		--  a 32-wide icon therefore anchors at -16 to share that center line).
 		bigIcon = new("ImageLabel", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -12, 0.5, 0),
-			Size = UDim2.fromOffset(28, 28),
+			Position = UDim2.new(1, -16, 0.5, 0),
+			Size = UDim2.fromOffset(32, 32),
 			BackgroundTransparency = 1,
 			Image = opts.Icon,
 			ImageColor3 = THEME.SubText,
