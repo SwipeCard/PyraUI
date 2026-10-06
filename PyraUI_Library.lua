@@ -1441,21 +1441,27 @@ function Library:CreateSidePanel(opts)
 		if opts.OnDetach then opts.OnDetach(true) end
 	end
 
-	local function reattach()
+	local function dock()
+		root.Parent = win.Holder
+		root.AnchorPoint = Vector2.new(0, 0.5)
+		root.ZIndex = 0
+		root.Position = DOCK_SHOWN
+		shown = true
+		local str = root:FindFirstChildOfClass("UIStroke")
+		if str then tween(str, 0.2, { Color = Color3.new(1, 1, 1), Transparency = 0.88 }) end
+		if win.ActiveTab ~= panel._homeTab and not pinned then panel:Hide() end
+	end
+	local function reattach(instant)
 		if not detached then return end
 		detached = false
-		local home = worldHomePos()
-		tween(root, 0.35, { Position = UDim2.fromOffset(home.X, home.Y) }, Enum.EasingStyle.Quint).Completed:Connect(function()
-			if detached then return end
-			root.Parent = win.Holder
-			root.AnchorPoint = Vector2.new(0, 0.5)
-			root.ZIndex = 0
-			root.Position = DOCK_SHOWN
-			shown = true
-			local str = root:FindFirstChildOfClass("UIStroke")
-			if str then tween(str, 0.2, { Color = Color3.new(1, 1, 1), Transparency = 0.88 }) end
-			if win.ActiveTab ~= panel._homeTab and not pinned then panel:Hide() end
-		end)
+		if instant then
+			dock()
+		else
+			local home = worldHomePos()
+			tween(root, 0.25, { Position = UDim2.fromOffset(home.X, home.Y) }, Enum.EasingStyle.Quint).Completed:Connect(function()
+				if not detached then dock() end
+			end)
+		end
 		playSound(SOUND_CLICK, 0.3, 0.9)
 		if opts.OnDetach then opts.OnDetach(false) end
 	end
@@ -1482,23 +1488,25 @@ function Library:CreateSidePanel(opts)
 	pinBtn.MouseLeave:Connect(function() if not pinned then tween(pinBtn, 0.15, { BackgroundTransparency = 1 }) end end)
 
 	local dragHandle = new("TextButton", {
-		Size = UDim2.new(1, -44, 0, 40),
-		Position = UDim2.fromOffset(0, 0),
+		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromScale(0, 0),
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Text = "",
 		Active = true,
-		ZIndex = 5,
-		Parent = header,
+		ZIndex = 1,
+		Parent = root,
 	})
 
 	local dragging, dragStart, startAbs = false, nil, nil
+	local snapped = false
 	local DETACH_THRESHOLD = 60
-	local SNAP_RADIUS = 90
+	local SNAP_RADIUS = 110
 
 	dragHandle.InputBegan:Connect(function(input)
 		if not isPress(input) then return end
 		dragging = true
+		snapped = false
 		dragStart = input.Position
 		startAbs = root.AbsolutePosition
 		local conn
@@ -1507,12 +1515,8 @@ function Library:CreateSidePanel(opts)
 				dragging = false
 				conn:Disconnect()
 				if win.ContentHighlight then tween(win.ContentHighlight, 0.2, { BackgroundTransparency = 1 }) end
-				if detached then
-					local home = worldHomePos()
-					local cur = root.AbsolutePosition
-					if (Vector2.new(cur.X, cur.Y) - home).Magnitude < SNAP_RADIUS then
-						reattach()
-					end
+				if detached and snapped then
+					reattach(true)
 				end
 			end
 		end)
@@ -1526,12 +1530,21 @@ function Library:CreateSidePanel(opts)
 				detach(Vector2.new(target.X, target.Y))
 			end
 		else
-			root.Position = UDim2.fromOffset(target.X, target.Y)
 			local home = worldHomePos()
-			local near = (Vector2.new(target.X, target.Y) - home).Magnitude < SNAP_RADIUS
-			tween(root:FindFirstChildOfClass("UIStroke"), 0.15, { Color = near and THEME.Accent or Color3.new(1, 1, 1), Transparency = near and 0.3 or 0.88 })
+			local dist = (Vector2.new(target.X, target.Y) - home).Magnitude
+			if dist < SNAP_RADIUS then
+				if not snapped then
+					snapped = true
+					playSound(SOUND_CLICK, 0.25, 1.15)
+				end
+				tween(root, 0.15, { Position = UDim2.fromOffset(home.X, home.Y) }, Enum.EasingStyle.Quint)
+			else
+				snapped = false
+				root.Position = UDim2.fromOffset(target.X, target.Y)
+			end
+			tween(root:FindFirstChildOfClass("UIStroke"), 0.15, { Color = snapped and THEME.Accent or Color3.new(1, 1, 1), Transparency = snapped and 0.3 or 0.88 })
 			if win.ContentHighlight then
-				tween(win.ContentHighlight, 0.15, { BackgroundTransparency = near and 0.85 or 1 })
+				tween(win.ContentHighlight, 0.15, { BackgroundTransparency = snapped and 0.82 or 1 })
 			end
 		end
 	end))
@@ -1743,18 +1756,22 @@ function Library:Notify(title, text, durationOrOpts)
 	end
 
 	if type(opts.Button) == "string" then
+		nameRow.Size = UDim2.new(1, -120, 1, 0)
 		local btn = new("TextButton", {
-			Size = UDim2.new(1, 0, 0, 26),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, 0, 0.5, 0),
+			Size = UDim2.fromOffset(0, 22),
+			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundColor3 = THEME.Card,
 			BackgroundTransparency = 0.9,
 			AutoButtonColor = false,
-			Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text,
+			Font = FONT_MEDIUM, TextSize = 11, TextColor3 = THEME.SubText,
 			Text = opts.Button,
-			LayoutOrder = 3,
-			Parent = card,
-		}, { corner(6), stroke(Color3.new(1, 1, 1), 0.88) })
-		btn.MouseEnter:Connect(function() tween(btn, 0.15, { BackgroundTransparency = 0.82 }) end)
-		btn.MouseLeave:Connect(function() tween(btn, 0.15, { BackgroundTransparency = 0.9 }) end)
+			ZIndex = 3,
+			Parent = header,
+		}, { corner(6), stroke(Color3.new(1, 1, 1), 0.88), pad(0, 10, 0, 10) })
+		btn.MouseEnter:Connect(function() tween(btn, 0.15, { BackgroundTransparency = 0.82, TextColor3 = THEME.Text }) end)
+		btn.MouseLeave:Connect(function() tween(btn, 0.15, { BackgroundTransparency = 0.9, TextColor3 = THEME.SubText }) end)
 		btn.Activated:Connect(function()
 			if opts.OnButton then pcall(opts.OnButton) end
 			task.spawn(close)
@@ -4085,7 +4102,7 @@ function Tab:AddPlayerSearch(opts)
 
 	local box = new("TextBox", {
 		Position = UDim2.new(0, 12, 0, 8),
-		Size = UDim2.new(1, -46, 0, 24),
+		Size = UDim2.new(1, -52, 0, 24),
 		BackgroundColor3 = THEME.Card,
 		BackgroundTransparency = 0.92,
 		ClearTextOnFocus = false,
