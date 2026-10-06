@@ -43,8 +43,8 @@ local SOLID_T       = 0.06
 local CARD_T        = 0.955
 local CARD_HOVER_T  = 0.93
 
-local FONT        = Enum.Font.Gotham
-local FONT_MEDIUM = Enum.Font.GothamMedium
+local FONT        = Enum.Font.GothamMedium
+local FONT_MEDIUM = Enum.Font.GothamBold
 local FONT_BOLD   = Enum.Font.GothamBold
 
 local LOGO_ID = "rbxassetid://6023426921"
@@ -63,6 +63,8 @@ local ICONS = {
 	Pin_Selected = "rbxassetid://135812284323262",
 	Warning = "rbxassetid://90951955041815",
 	Discord = "rbxassetid://123978857883708",
+	Sword = "rbxassetid://105435037070971",
+	Sword_Selected = "rbxassetid://120638001068240",
 }
 
 local function iconOrText(id, fallback)
@@ -868,9 +870,12 @@ function Library.new(config)
 		):Play()
 	end
 	label({
-		Text = "P R E M I U M", Font = FONT_BOLD, TextSize = 11, TextColor3 = THEME.Accent,
-		TextTransparency = 0.25,
-		Position = UDim2.new(0, 70, 0.5, 2), Size = UDim2.fromOffset(0, 14),
+		Text = "P R E M I U M", Font = FONT_BOLD, TextSize = 11,
+		TextColor3 = Color3.fromRGB(240, 200, 60),
+		TextTransparency = 0.1,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 70, 0.5, 9), Size = UDim2.fromOffset(0, 16),
+		TextYAlignment = Enum.TextYAlignment.Center,
 		AutomaticSize = Enum.AutomaticSize.X, ZIndex = 3, Parent = self.Footer,
 	})
 
@@ -931,8 +936,9 @@ function Library.new(config)
 	end
 
 	self.StatusColor = (typeof(config.StatusColor) == "Color3") and config.StatusColor or STATUS_GREEN
+	self.StatusText = config.Status or "Manual"
 	local statusHex = self.StatusColor:ToHex()
-	self.StatusValue = chip("STATUS", string.format('<font color="#%s">●</font> %s', statusHex, config.Status or "Manual"))
+	self.StatusValue = chip("STATUS", string.format('<font color="#%s">●</font> %s', statusHex, self.StatusText))
 	self.ExpiryValue = chip("EXPIRES", config.Expiry or "12/21/2036")
 	local pingValue = chip("PING", "-- ms")
 	local fpsValue = chip("FPS", "--")
@@ -1200,16 +1206,20 @@ function Library:SetMinimized(state)
 
 	local fullH = DOCK_H + GAP + PANEL_H + GAP + FOOTER_H
 	local miniH = DOCK_H + GAP + FOOTER_H
-	local dockUsed = 108 + (self.TabBarWidth or 0) + 110
-	local miniW = math.clamp(dockUsed, 300, WINDOW_W)
+
+	local dockUsed = 108 + (self.TabBarWidth or 0) + 48 + 88
+	local miniW = math.clamp(dockUsed, 320, WINDOW_W)
 
 	if state then
+		if self._closeSearch then self:_closeSearch() end
+		if self.SearchBar then self.SearchBar.Visible = false end
 		tween(self.Panel, 0.35, { Size = UDim2.new(1, 0, 0, 0) }).Completed:Connect(function()
 			if self.Minimized then self.Panel.Visible = false end
 		end)
 		tween(self.Footer, 0.35, { Position = UDim2.new(0, 0, 0, DOCK_H + GAP) })
 		tween(self.Holder, 0.4, { Size = UDim2.fromOffset(miniW, miniH) }, Enum.EasingStyle.Quint)
 	else
+		if self.SearchBar then self.SearchBar.Visible = true end
 		self.Panel.Visible = true
 		tween(self.Panel, 0.4, { Size = UDim2.new(1, 0, 0, PANEL_H) })
 		tween(self.Footer, 0.4, { Position = UDim2.new(0, 0, 0, self.FooterY) })
@@ -1332,23 +1342,21 @@ function Library:CreateSidePanel(opts)
 
 	local root = new("CanvasGroup", {
 		Name = "SidePanel",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(1, 20, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromOffset(0, 0),
 		Size = UDim2.fromOffset(W, 300),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = THEME.Glass,
 		BackgroundTransparency = self.IsMobile and SOLID_T or GLASS_PANEL_T,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 2,
-		Parent = self.Holder,
+		ZIndex = 80,
+		Parent = self.Gui,
 	}, { corner(12), stroke(Color3.new(1, 1, 1), 0.88) })
 	if not self.IsMobile then
 		local a = createAcrylic(root)
 		table.insert(self.Acrylic, a)
 	end
-
-	local scale = new("UIScale", { Scale = 0.9, Parent = root })
 
 	new("ImageLabel", {
 		Name = "Noise", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
@@ -1470,100 +1478,93 @@ function Library:CreateSidePanel(opts)
 	end
 	function panel:ClearAvatar() avatar.Image = DEFAULT_AVATAR end
 
-	local DOCK_HIDDEN = UDim2.new(1, -W + 10, 0.5, 0)
-	local DOCK_SHOWN = UDim2.new(1, 16, 0.5, 0)
 	local win = self
-
-	root.Position = DOCK_HIDDEN
-	root.ZIndex = 0
 
 	local shown = false
 	local detached = false
-	local detachConn
-	local shownBeforeDetach = false
+	local dragging = false
+	local target = Vector2.new()
 
-	local function worldHomePos()
-		local holder = win.Holder
-		local hp = holder.AbsolutePosition
-		local hs = holder.AbsoluteSize
-		local scale = win.UIScale.Scale
-		return Vector2.new(hp.X + hs.X + 16 * scale, hp.Y + hs.Y / 2 - root.AbsoluteSize.Y / 2)
+	local function dockTopLeft()
+		local h = win.Holder
+		local hp, hs = h.AbsolutePosition, h.AbsoluteSize
+		return Vector2.new(hp.X + hs.X + 16, hp.Y + hs.Y / 2 - root.AbsoluteSize.Y / 2)
 	end
 
-	local showTok = 0
+	local function hideTopLeft()
+		local cam = workspace.CurrentCamera
+		local vp = (cam and cam.ViewportSize) or Vector2.new(1280, 720)
+		local d = dockTopLeft()
+		return Vector2.new(vp.X + 30, d.Y)
+	end
+
+	root.Position = UDim2.fromOffset(hideTopLeft().X, hideTopLeft().Y)
+
+	local driveConn = RunService.RenderStepped:Connect(function(dt)
+		if not root.Visible then return end
+		if dragging or detached then return end
+
+		if shown then target = dockTopLeft() end
+		local cur = root.AbsolutePosition
+		local a = math.clamp(dt * 16, 0, 1)
+		local nx = cur.X + (target.X - cur.X) * a
+		local ny = cur.Y + (target.Y - cur.Y) * a
+		root.Position = UDim2.fromOffset(nx, ny)
+	end)
+	table.insert(self.Connections, driveConn)
+
+	local fadeTok = 0
+	local function fadeTo(t)
+		fadeTok += 1
+		TweenService:Create(root, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { GroupTransparency = t }):Play()
+	end
+
 	function panel:Show()
 		if detached then return end
 		if shown then return end
 		shown = true
-		showTok += 1
+		if not root.Visible then
+
+			local h = hideTopLeft()
+			root.Position = UDim2.fromOffset(h.X, h.Y)
+			root.GroupTransparency = 1
+		end
 		root.Visible = true
-		root.ZIndex = 0
-		root.Position = DOCK_HIDDEN
-		root.GroupTransparency = 1
-		local SHOW = TweenInfo.new(0.42, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-		TweenService:Create(root, SHOW, { Position = DOCK_SHOWN, GroupTransparency = 0 }):Play()
+		target = dockTopLeft()
+		fadeTo(0)
 	end
 	function panel:Hide()
 		if detached then return end
 		if not shown then return end
 		shown = false
-		showTok += 1
-		local tok = showTok
-
-		local HIDE = TweenInfo.new(0.32, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-		TweenService:Create(root, HIDE, { Position = DOCK_HIDDEN, GroupTransparency = 1 }):Play()
-		task.delay(0.32, function()
-			if tok == showTok and not shown and not detached then root.Visible = false end
+		target = hideTopLeft()
+		fadeTo(1)
+		local myTok = fadeTok
+		task.delay(0.4, function()
+			if myTok == fadeTok and not shown and not detached then root.Visible = false end
 		end)
 	end
 
-	local function detach(fromPos)
+	local function detach()
 		if detached then return end
 		detached = true
-		shownBeforeDetach = shown
-		local abs = root.AbsolutePosition
-		root.Parent = win.Gui
-		root.AnchorPoint = Vector2.new(0, 0)
-		root.ZIndex = 60
-		root.Position = UDim2.fromOffset(abs.X, abs.Y)
+		shown = true
 		root.Visible = true
 		root.GroupTransparency = 0
-		shown = true
 		playSound(SOUND_CLICK, 0.3, 1.2)
 		if opts.OnDetach then opts.OnDetach(true) end
 	end
-
-	local function killPositionTween()
-		TweenService:Create(root, TweenInfo.new(0), { Position = root.Position }):Play()
-	end
-	local function dock()
-		killPositionTween()
-		root.Parent = win.Holder
-		root.AnchorPoint = Vector2.new(0, 0.5)
-		root.ZIndex = 0
-		root.Position = DOCK_SHOWN
-		shown = true
-		local str = root:FindFirstChildOfClass("UIStroke")
-		if str then tween(str, 0.2, { Color = Color3.new(1, 1, 1), Transparency = 0.88 }) end
-		if win.ActiveTab ~= panel._homeTab and not pinned then panel:Hide() end
-	end
-	local reattachTok = 0
-	local function reattach(instant)
+	local function reattach()
 		if not detached then return end
 		detached = false
-		reattachTok += 1
-		local tok = reattachTok
-		if instant then
-			dock()
-		else
-			local home = worldHomePos()
-			tween(root, 0.25, { Position = UDim2.fromOffset(home.X, home.Y) }, Enum.EasingStyle.Quint).Completed:Connect(function()
 
-				if not detached and tok == reattachTok then dock() end
-			end)
-		end
+		target = dockTopLeft()
 		playSound(SOUND_CLICK, 0.3, 0.9)
 		if opts.OnDetach then opts.OnDetach(false) end
+
+		if win.ActiveTab ~= panel._homeTab and not pinned then
+			task.delay(0.28, function() if not detached then panel:Hide() end end)
+		end
 	end
 
 	function panel:IsDetached() return detached end
@@ -1597,56 +1598,52 @@ function Library:CreateSidePanel(opts)
 		Parent = root,
 	})
 
-	local dragging, dragStart, startAbs = false, nil, nil
-	local snapped = false
-	local DETACH_THRESHOLD = 60
-	local SNAP_RADIUS = 110
+	local dragStart = nil
+	local grabOffset = nil
+	local DETACH_THRESHOLD = 20
+	local DOCK_SNAP_RADIUS = 130
+
+	local function followCursor(mouse)
+		if not grabOffset then return end
+		local tl = mouse - grabOffset
+		root.Position = UDim2.fromOffset(tl.X, tl.Y)
+	end
 
 	dragHandle.InputBegan:Connect(function(input)
 		if not isPress(input) then return end
 		dragging = true
-		snapped = false
-		dragStart = input.Position
-		startAbs = root.AbsolutePosition
+		dragStart = Vector2.new(input.Position.X, input.Position.Y)
+		grabOffset = dragStart - root.AbsolutePosition
 		local conn
 		conn = input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
 				dragging = false
 				conn:Disconnect()
-				if win.ContentHighlight then tween(win.ContentHighlight, 0.2, { BackgroundTransparency = 1 }) end
-				if detached and snapped then
-					reattach(true)
+				if not detached then return end
+
+				local tl = root.AbsolutePosition
+				local near = (tl - dockTopLeft()).Magnitude < DOCK_SNAP_RADIUS
+				if near then
+					reattach()
+				else
+
+					target = tl
 				end
 			end
 		end)
 	end)
 	table.insert(self.Connections, UserInputService.InputChanged:Connect(function(input)
 		if not dragging or not isMove(input) then return end
-		local delta = input.Position - dragStart
-		local target = startAbs + Vector2.new(delta.X, delta.Y)
+		local mouse = Vector2.new(input.Position.X, input.Position.Y)
 		if not detached then
-			if math.abs(delta.X) + math.abs(delta.Y) > DETACH_THRESHOLD then
+
+			if (mouse - dragStart).Magnitude > DETACH_THRESHOLD then
+				grabOffset = dragStart - root.AbsolutePosition
 				detach()
-				dragStart = input.Position
-				startAbs = root.AbsolutePosition
+				followCursor(mouse)
 			end
 		else
-			local home = worldHomePos()
-			local dist = (Vector2.new(target.X, target.Y) - home).Magnitude
-			if dist < SNAP_RADIUS then
-				if not snapped then
-					snapped = true
-					playSound(SOUND_CLICK, 0.25, 1.15)
-				end
-				tween(root, 0.15, { Position = UDim2.fromOffset(home.X, home.Y) }, Enum.EasingStyle.Quint)
-			else
-				snapped = false
-				root.Position = UDim2.fromOffset(target.X, target.Y)
-			end
-			tween(root:FindFirstChildOfClass("UIStroke"), 0.15, { Color = snapped and THEME.Accent or Color3.new(1, 1, 1), Transparency = snapped and 0.3 or 0.88 })
-			if win.ContentHighlight then
-				tween(win.ContentHighlight, 0.15, { BackgroundTransparency = snapped and 0.82 or 1 })
-			end
+			followCursor(mouse)
 		end
 	end))
 
@@ -1677,6 +1674,12 @@ function Library:AddMonitor(key, label_)
 		Visible = false,
 		LayoutOrder = order * 2,
 		Parent = self.MonitorBar,
+	})
+	local content = new("Frame", {
+		Size = UDim2.fromOffset(0, 24),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
+		Parent = cell,
 	}, {
 		new("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
@@ -1688,16 +1691,16 @@ function Library:AddMonitor(key, label_)
 	local capLabel = label({
 		Text = (label_ or key):upper(), Font = FONT_BOLD, TextSize = 9, TextColor3 = THEME.SubText,
 		TextTransparency = 1,
-		Size = UDim2.fromOffset(0, 12), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = 1, Parent = cell,
+		Size = UDim2.fromOffset(0, 12), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = 1, Parent = content,
 	})
 	local valueLabel = label({
 		Text = "--", Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text,
 		TextTransparency = 1,
-		Size = UDim2.fromOffset(0, 14), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = 2, Parent = cell,
+		Size = UDim2.fromOffset(0, 14), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = 2, Parent = content,
 	})
 
 	local clickBtn = new("TextButton", {
-		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 5, Parent = cell,
+		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 5, Active = true, Parent = cell,
 	})
 
 	local win = self
@@ -1742,8 +1745,9 @@ end
 
 function Library:SetStatus(text, color)
 	if typeof(color) == "Color3" then self.StatusColor = color end
+	if text ~= nil then self.StatusText = tostring(text) end
 	local hex = (self.StatusColor or STATUS_GREEN):ToHex()
-	self.StatusValue.Text = string.format('<font color="#%s">●</font> %s', hex, tostring(text))
+	self.StatusValue.Text = string.format('<font color="#%s">●</font> %s', hex, self.StatusText or "")
 end
 
 function Library:SetExpiry(text)
@@ -2259,7 +2263,7 @@ function Library:AddTab(name, tabOpts)
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Text = name,
-		Font = FONT_MEDIUM,
+		Font = FONT_BOLD,
 		TextSize = 13,
 		TextColor3 = THEME.SubText,
 		ZIndex = 4,
@@ -3117,28 +3121,24 @@ function Tab:AddToggle(opts)
 		box.MouseEnter:Connect(function() if not isOpen then tween(box, 0.15, { BackgroundTransparency = 0.86 }) end end)
 		box.MouseLeave:Connect(function() if not isOpen then tween(box, 0.15, { BackgroundTransparency = 0.92 }) end end)
 
-		local list = new("Frame", {
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.fromOffset(0, baseH),
-			Size = UDim2.new(0, 88, 0, #options * (OPT_H + GAP) + 6),
-			BackgroundTransparency = 1,
+		local win = self.Window
+		local OVL_W = 132
+		local overlay = new("Frame", {
+			Name = "DropOverlay",
+			Size = UDim2.fromOffset(OVL_W, 0),
+			BackgroundColor3 = THEME.Glass,
+			BackgroundTransparency = 0.05,
+			BorderSizePixel = 0,
 			Visible = false,
-			ZIndex = 8,
-			Parent = box,
+			ZIndex = 200,
+			ClipsDescendants = true,
+			Parent = win.Gui,
 		}, {
-			pad(3, 0, 3, 0),
-			new("UIListLayout", { Padding = UDim.new(0, GAP), SortOrder = Enum.SortOrder.LayoutOrder }),
+			corner(8),
+			stroke(Color3.new(1, 1, 1), 0.82),
+			pad(5, 5, 5, 5),
+			new("UIListLayout", { Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }),
 		})
-		local dropAnchor = new("Frame", {
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -60, 0.5, 0),
-			Size = UDim2.fromOffset(88, 24),
-			BackgroundTransparency = 1,
-			ZIndex = 7,
-			Parent = frame,
-		})
-		list.Parent = dropAnchor
-		list.Position = UDim2.fromOffset(0, 26)
 
 		local dropApi = api
 		local function dselect(opt)
@@ -3146,33 +3146,47 @@ function Tab:AddToggle(opts)
 			sel.Text = tostring(opt)
 			fire(opts.OptionCallback, opt)
 		end
-		for i, opt in ipairs(options) do
-			local b = new("TextButton", {
-				Size = UDim2.new(1, 0, 0, OPT_H),
-				BackgroundColor3 = THEME.Glass,
-				BackgroundTransparency = SOLID_T,
-				AutoButtonColor = false,
-				Text = "",
-				LayoutOrder = i,
-				ZIndex = 9,
-				Parent = list,
-			}, { corner(5), stroke(Color3.new(1, 1, 1), 0.88) })
-			label({
-				Text = tostring(opt), TextSize = 11, TextColor3 = THEME.SubText,
-				Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -12, 1, 0), ZIndex = 10, Parent = b,
-			})
-			b.MouseEnter:Connect(function() tween(b, 0.12, { BackgroundTransparency = 0 }) end)
-			b.MouseLeave:Connect(function() tween(b, 0.12, { BackgroundTransparency = SOLID_T }) end)
-			b.Activated:Connect(function()
-				dselect(opt)
-				dropApi:SetDropOpen(false)
-			end)
+		local function rebuild()
+			for _, c in ipairs(overlay:GetChildren()) do
+				if c:IsA("TextButton") then c:Destroy() end
+			end
+			for i, opt in ipairs(options) do
+				local isSel = opt == selected
+				local b = new("TextButton", {
+					Size = UDim2.new(1, 0, 0, OPT_H + 4),
+					BackgroundColor3 = isSel and THEME.Accent or THEME.Glass,
+					BackgroundTransparency = isSel and 0 or SOLID_T,
+					AutoButtonColor = false,
+					Text = "",
+					LayoutOrder = i,
+					ZIndex = 201,
+					Parent = overlay,
+				}, { corner(6), stroke(Color3.new(1, 1, 1), 0.88) })
+				local optLbl = label({
+					Text = tostring(opt), Font = FONT_MEDIUM, TextSize = 11,
+					TextColor3 = isSel and THEME.AccentInverse or THEME.Body,
+					Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -12, 1, 0), ZIndex = 202, Parent = b,
+				})
+				b.MouseEnter:Connect(function() if opt ~= selected then tween(b, 0.1, { BackgroundTransparency = 0 }) end end)
+				b.MouseLeave:Connect(function() if opt ~= selected then tween(b, 0.1, { BackgroundTransparency = SOLID_T }) end end)
+				b.Activated:Connect(function()
+					dselect(opt)
+					rebuild()
+				end)
+			end
 		end
 
+		local function repositionOverlay()
+			local holder = win.Holder
+			local hx = holder.AbsolutePosition.X
+			local hw = holder.AbsoluteSize.X
+			local by = box.AbsolutePosition.Y
+			overlay.Position = UDim2.fromOffset(hx + hw + 10, by)
+		end
+
+		local posConn
 		function api:SetDropOpen(open)
 			isOpen = open
-			frame.ClipsDescendants = not open
-			list.Visible = open
 			playSound(SOUND_CLICK, 0.2, open and 1.05 or 0.95)
 			if arrUseIcon then
 				tween(arr, 0.25, { Rotation = open and 180 or 0, ImageColor3 = open and THEME.Text or THEME.Body })
@@ -3180,9 +3194,22 @@ function Tab:AddToggle(opts)
 				tween(arr, 0.25, { Rotation = open and 180 or 0, TextColor3 = open and THEME.Text or THEME.SubText })
 			end
 			tween(box, 0.2, { BackgroundTransparency = open and 0.86 or 0.92 })
+			if open then
+				rebuild()
+				repositionOverlay()
+				overlay.Visible = true
+				local fullH = #options * (OPT_H + 4 + 3) + 10
+				overlay.Size = UDim2.fromOffset(OVL_W, 0)
+				tween(overlay, 0.2, { Size = UDim2.fromOffset(OVL_W, fullH) }, Enum.EasingStyle.Quint)
+				posConn = RunService.RenderStepped:Connect(repositionOverlay)
+			else
+				if posConn then posConn:Disconnect() posConn = nil end
+				tween(overlay, 0.18, { Size = UDim2.fromOffset(OVL_W, 0) }, Enum.EasingStyle.Quint)
+				task.delay(0.18, function() if not isOpen then overlay.Visible = false end end)
+			end
 		end
 		function api:GetOption() return selected end
-		function api:SetOption(opt) dselect(opt) end
+		function api:SetOption(opt) dselect(opt) rebuild() end
 		box.Activated:Connect(function() api:SetDropOpen(not isOpen) end)
 	end
 
@@ -4442,9 +4469,8 @@ function Tab:AddPlayerSearch(opts)
 	local box = new("TextBox", {
 		Position = UDim2.new(0, 12, 0, 8),
 		Size = UDim2.new(1, -52, 0, 24),
-
-		BackgroundColor3 = THEME.Glass,
-		BackgroundTransparency = 0.25,
+		BackgroundColor3 = THEME.Card,
+		BackgroundTransparency = 0.88,
 		ClearTextOnFocus = false,
 		Font = FONT,
 		TextSize = 12,
@@ -4475,12 +4501,21 @@ function Tab:AddPlayerSearch(opts)
 		focusBlocker.Visible = false
 	end)
 
+	focusBlocker.MouseEnter:Connect(function()
+		UserInputService.MouseIcon = "rbxasset://SystemCursors/PointingHand"
+		tween(boxStroke, 0.12, { Transparency = 0.2 })
+	end)
+	focusBlocker.MouseLeave:Connect(function()
+		UserInputService.MouseIcon = ""
+		tween(boxStroke, 0.12, { Transparency = 0.4 })
+	end)
+
 	local searchBtn = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 8),
 		Size = UDim2.fromOffset(24, 24),
 		BackgroundColor3 = THEME.Card,
-		BackgroundTransparency = 0.92,
+		BackgroundTransparency = 0.82,
 		AutoButtonColor = false,
 		Text = "",
 		ZIndex = 7,
@@ -4574,8 +4609,9 @@ function Tab:AddPlayerSearch(opts)
 				end
 			end
 		end
-		local listH = shown * (ROW_H + 4) + 10
-		listHolder.Size = UDim2.new(1, -20, 0, listH)
+
+		local listH = shown > 0 and (shown * (ROW_H + 4) + 10) or 0
+		listHolder.Size = UDim2.new(1, -20, 0, math.max(listH, 0))
 		return listH
 	end
 
@@ -4611,6 +4647,13 @@ function Tab:AddPlayerSearch(opts)
 		api:Open()
 		task.delay(0.1, function() focusGuard = false end)
 	end)
+
+	box.FocusLost:Connect(function()
+		task.delay(0.05, function()
+			if selecting then return end
+			if open and not box:IsFocused() then api:Close() end
+		end)
+	end)
 	box.InputBegan:Connect(function(input)
 		if not isPress(input) then return end
 		if box:IsFocused() and not focusGuard then
@@ -4623,8 +4666,8 @@ function Tab:AddPlayerSearch(opts)
 			tween(frame, 0.15, { Size = UDim2.new(1, 0, 0, HEADER + listH) })
 		end
 	end)
-	searchBtn.MouseEnter:Connect(function() tween(searchBtn, 0.15, { BackgroundTransparency = 0.86 }) end)
-	searchBtn.MouseLeave:Connect(function() tween(searchBtn, 0.15, { BackgroundTransparency = 0.92 }) end)
+	searchBtn.MouseEnter:Connect(function() tween(searchBtn, 0.15, { BackgroundTransparency = 0.74 }) end)
+	searchBtn.MouseLeave:Connect(function() tween(searchBtn, 0.15, { BackgroundTransparency = 0.82 }) end)
 
 	return api
 end
