@@ -1264,7 +1264,9 @@ function Library:CreateSidePanel(opts)
 	})
 	local title = label({
 		Text = opts.Title or "Target Info", Font = FONT_BOLD, TextSize = 14,
-		Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -50, 1, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(1, -72, 1, 0),
+		TextXAlignment = Enum.TextXAlignment.Center,
 		TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = header,
 	})
 
@@ -1310,9 +1312,11 @@ function Library:CreateSidePanel(opts)
 		}),
 	})
 
+	local DEFAULT_AVATAR = "rbxthumb://type=AvatarHeadShot&id=1&w=150&h=150"
 	local avatar = new("ImageLabel", {
 		Size = UDim2.fromOffset(64, 64),
 		BackgroundColor3 = THEME.Switch,
+		Image = DEFAULT_AVATAR,
 		LayoutOrder = 0,
 		ZIndex = 4,
 		Parent = body,
@@ -1363,7 +1367,7 @@ function Library:CreateSidePanel(opts)
 		if not rows[key] then addStat(key) end
 		rows[key].Text = tostring(value)
 	end
-	function panel:ClearAvatar() avatar.Image = "" end
+	function panel:ClearAvatar() avatar.Image = DEFAULT_AVATAR end
 
 	local DOCK_HIDDEN = UDim2.new(1, -W + 10, 0.5, 0)
 	local DOCK_SHOWN = UDim2.new(1, 16, 0.5, 0)
@@ -1621,8 +1625,9 @@ function Library:SetWorldDimPersistent(state)
 	self:_applyWorld(self.Open)
 end
 
-function Library:Notify(title, text, duration)
-	duration = duration or 5
+function Library:Notify(title, text, durationOrOpts)
+	local opts = type(durationOrOpts) == "table" and durationOrOpts or {}
+	local duration = type(durationOrOpts) == "number" and durationOrOpts or (opts.Duration or 5)
 	local width = 310
 	self.NotifyCount += 1
 
@@ -1699,12 +1704,45 @@ function Library:Notify(title, text, duration)
 		LineHeight = 1.1, LayoutOrder = 2, Parent = card,
 	})
 
+	local closed = false
+	local function close()
+		if closed then return end
+		closed = true
+		tween(card, 0.35, { Position = UDim2.fromOffset(width + 40, 0) }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		task.wait(0.3)
+		local h = wrap.AbsoluteSize.Y
+		wrap.AutomaticSize = Enum.AutomaticSize.None
+		wrap.ClipsDescendants = true
+		wrap.Size = UDim2.fromOffset(width, h)
+		tween(wrap, 0.25, { Size = UDim2.fromOffset(width, 0) }).Completed:Wait()
+		wrap:Destroy()
+	end
+
+	if type(opts.Button) == "string" then
+		local btn = new("TextButton", {
+			Size = UDim2.new(1, 0, 0, 26),
+			BackgroundColor3 = THEME.Card,
+			BackgroundTransparency = 0.9,
+			AutoButtonColor = false,
+			Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text,
+			Text = opts.Button,
+			LayoutOrder = 3,
+			Parent = card,
+		}, { corner(6), stroke(Color3.new(1, 1, 1), 0.88) })
+		btn.MouseEnter:Connect(function() tween(btn, 0.15, { BackgroundTransparency = 0.82 }) end)
+		btn.MouseLeave:Connect(function() tween(btn, 0.15, { BackgroundTransparency = 0.9 }) end)
+		btn.Activated:Connect(function()
+			if opts.OnButton then pcall(opts.OnButton) end
+			task.spawn(close)
+		end)
+	end
+
 	local track = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 2),
 		BackgroundColor3 = THEME.Card,
 		BackgroundTransparency = 0.9,
 		BorderSizePixel = 0,
-		LayoutOrder = 3,
+		LayoutOrder = 4,
 		Parent = card,
 	}, { round() })
 	local bar = new("Frame", {
@@ -1719,19 +1757,6 @@ function Library:Notify(title, text, duration)
 	tween(card, 0.6, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Back)
 	tween(bar, duration, { Size = UDim2.fromScale(0, 1) }, Enum.EasingStyle.Linear)
 
-	local closed = false
-	local function close()
-		if closed then return end
-		closed = true
-		tween(card, 0.35, { Position = UDim2.fromOffset(width + 40, 0) }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-		task.wait(0.3)
-		local h = wrap.AbsoluteSize.Y
-		wrap.AutomaticSize = Enum.AutomaticSize.None
-		wrap.ClipsDescendants = true
-		wrap.Size = UDim2.fromOffset(width, h)
-		tween(wrap, 0.25, { Size = UDim2.fromOffset(width, 0) }).Completed:Wait()
-		wrap:Destroy()
-	end
 	card.Activated:Connect(function() task.spawn(close) end)
 	task.delay(duration, close)
 end
