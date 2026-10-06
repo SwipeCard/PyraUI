@@ -60,6 +60,7 @@ local ICONS = {
 	Pin = "rbxassetid://129283132557583",
 	Spectate_Selected = "rbxassetid://77306507937998",
 	Pin_Selected = "rbxassetid://135812284323262",
+	Warning = "",
 }
 
 local function iconOrText(id, fallback)
@@ -580,10 +581,11 @@ function Library.new(config)
 			img = new("ImageLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromOffset(15, 15),
+				Size = UDim2.fromOffset(18, 18),
 				BackgroundTransparency = 1,
 				Image = iconId,
-				ImageColor3 = THEME.SubText,
+				ImageColor3 = THEME.Body,
+				ScaleType = Enum.ScaleType.Fit,
 				ZIndex = 5,
 				Parent = b,
 			})
@@ -628,9 +630,9 @@ function Library.new(config)
 	local searchImg
 	if useSearchIcon then
 		searchImg = new("ImageLabel", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -7, 0.5, 0),
-			Size = UDim2.fromOffset(15, 15), BackgroundTransparency = 1,
-			Image = ICONS.Search, ImageColor3 = THEME.SubText, ZIndex = 9, Parent = search,
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0),
+			Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+			Image = ICONS.Search, ImageColor3 = THEME.Body, ZIndex = 9, Parent = search,
 		})
 		icon:GetPropertyChangedSignal("TextColor3"):Connect(function()
 			searchImg.ImageColor3 = icon.TextColor3
@@ -1297,7 +1299,7 @@ function Library:CreateSidePanel(opts)
 	if usePinIcon then
 		pinImg = new("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(15, 15), BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(17, 17), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Pin, ImageColor3 = THEME.SubText, ZIndex = 5, Parent = pinBtn,
 		})
 	else
@@ -1802,6 +1804,45 @@ function Library:Notify(title, text, durationOrOpts)
 
 	card.Activated:Connect(function() task.spawn(close) end)
 	task.delay(duration, close)
+end
+
+function Library:_attachTooltip(target, text)
+	if not self.Tooltip then
+		self.Tooltip = new("Frame", {
+			Name = "Tooltip",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Size = UDim2.fromOffset(0, 0),
+			AutomaticSize = Enum.AutomaticSize.XY,
+			BackgroundColor3 = THEME.Glass,
+			BackgroundTransparency = SOLID_T,
+			BorderSizePixel = 0,
+			Visible = false,
+			ZIndex = 200,
+			Parent = self.Gui,
+		}, { corner(7), stroke(Color3.new(1, 1, 1), 0.82), pad(7, 10, 7, 10) })
+		self.TooltipLabel = label({
+			Text = "", Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text,
+			Size = UDim2.fromOffset(0, 0), AutomaticSize = Enum.AutomaticSize.XY,
+			ZIndex = 201, Parent = self.Tooltip,
+		})
+	end
+	target.MouseEnter:Connect(function()
+		self.TooltipLabel.Text = text
+		self.Tooltip.Visible = true
+		local ap = target.AbsolutePosition
+		local as = target.AbsoluteSize
+		self.Tooltip.Position = UDim2.fromOffset(ap.X + as.X / 2, ap.Y - 6)
+	end)
+	target.MouseMoved:Connect(function()
+		if self.Tooltip.Visible then
+			local ap = target.AbsolutePosition
+			local as = target.AbsoluteSize
+			self.Tooltip.Position = UDim2.fromOffset(ap.X + as.X / 2, ap.Y - 6)
+		end
+	end)
+	target.MouseLeave:Connect(function()
+		self.Tooltip.Visible = false
+	end)
 end
 
 function Library:OnDestroy(fn)
@@ -2315,10 +2356,11 @@ local function titleBlock(parent, name, description, rightInset, iconId)
 			Name = "TitleIcon",
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 12, 0.5, 0),
-			Size = UDim2.fromOffset(16, 16),
+			Size = UDim2.fromOffset(19, 19),
 			BackgroundTransparency = 1,
 			Image = iconId,
 			ImageColor3 = THEME.Text,
+			ScaleType = Enum.ScaleType.Fit,
 			ZIndex = 4,
 			Parent = parent,
 		})
@@ -2343,15 +2385,44 @@ local function titleBlock(parent, name, description, rightInset, iconId)
 	end
 end
 
-function Tab:AddSection(text)
-	label({
-		Text = string.upper(text), Font = FONT_BOLD, TextSize = 10,
-		TextColor3 = self.Accent == THEME.Accent and THEME.SubText or self.Accent,
+function Tab:AddSection(text, opts)
+	opts = opts or {}
+	local hasIcon = type(opts.Icon) == "string" and opts.Icon ~= ""
+	local row = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 18),
-		TextYAlignment = Enum.TextYAlignment.Bottom,
-		LayoutOrder = self:_nextOrder(), ZIndex = 4,
+		BackgroundTransparency = 1,
+		LayoutOrder = self:_nextOrder(),
+		ZIndex = 4,
 		Parent = self.Container,
 	})
+	local lbl = label({
+		Text = string.upper(text), Font = FONT_BOLD, TextSize = 10,
+		TextColor3 = opts.Color or (self.Accent == THEME.Accent and THEME.SubText or self.Accent),
+		Position = UDim2.fromOffset(0, 0),
+		Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X,
+		TextYAlignment = Enum.TextYAlignment.Bottom,
+		ZIndex = 4, Parent = row,
+	})
+	if hasIcon then
+		local iconHolder = new("Frame", {
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 0, 1, 0),
+			Size = UDim2.fromOffset(16, 16),
+			BackgroundTransparency = 1,
+			ZIndex = 4,
+			Parent = row,
+		})
+		new("ImageLabel", {
+			Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+			Image = opts.Icon, ImageColor3 = opts.Color or THEME.Text,
+			ScaleType = Enum.ScaleType.Fit, ZIndex = 4, Parent = iconHolder,
+		})
+		lbl.Position = UDim2.fromOffset(20, 0)
+		if type(opts.Tooltip) == "string" then
+			self.Window:_attachTooltip(iconHolder, opts.Tooltip)
+		end
+	end
+	return row
 end
 
 function Tab:AddLockedSection(opts)
@@ -3733,7 +3804,18 @@ function Tab:AddRandomSlider(opts)
 		end
 	end
 
-	local MORPH = TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+	local FADE = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local function fadeElems(targetT)
+		TweenService:Create(fill, FADE, { BackgroundTransparency = targetT }):Play()
+		TweenService:Create(knobA, FADE, { BackgroundTransparency = targetT }):Play()
+		TweenService:Create(knobB, FADE, { BackgroundTransparency = targetT }):Play()
+		for _, k in ipairs({ knobA, knobB }) do
+			local dot = k:FindFirstChildOfClass("Frame")
+			if dot then TweenService:Create(dot, FADE, { BackgroundTransparency = targetT }):Play() end
+		end
+		TweenService:Create(valueLabel, FADE, { TextTransparency = targetT }):Play()
+	end
+	local morphTok = 0
 	local api = {}
 	function api:SetRandomize(on)
 		on = on == true
@@ -3743,26 +3825,31 @@ function Tab:AddRandomSlider(opts)
 		tween(rngChip, 0.25, { TextColor3 = on and self.AccentInverse or THEME.Text })
 
 		morphing = true
-		if on then
-			knobB.Visible = true
-			knobB.Position = UDim2.fromScale(pctOf(val), 0.5)
-			knobB.Size = UDim2.fromOffset(4, 4)
-			TweenService:Create(knobB, MORPH, { Position = UDim2.fromScale(pctOf(hi), 0.5), Size = UDim2.fromOffset(12, 12) }):Play()
-			TweenService:Create(knobA, MORPH, { Position = UDim2.fromScale(pctOf(lo), 0.5) }):Play()
-			TweenService:Create(fill, MORPH, { Position = UDim2.fromScale(pctOf(lo), 0), Size = UDim2.fromScale(pctOf(hi) - pctOf(lo), 1) }):Play()
-			if not editing then valueLabel.Text = format(lo) .. suffix .. "  -  " .. format(hi) .. suffix end
-		else
-			TweenService:Create(knobA, MORPH, { Position = UDim2.fromScale(pctOf(val), 0.5) }):Play()
-			TweenService:Create(knobB, MORPH, { Position = UDim2.fromScale(pctOf(val), 0.5), Size = UDim2.fromOffset(4, 4) }):Play()
-			TweenService:Create(fill, MORPH, { Position = UDim2.fromScale(0, 0), Size = UDim2.fromScale(pctOf(val), 1) }):Play()
-			if not editing then valueLabel.Text = format(val) .. suffix end
-		end
-		playSound(SOUND_CLICK, 0.25, on and 1.1 or 0.9)
-		task.delay(0.4, function()
-			morphing = false
-			if not randomize then knobB.Visible = false knobB.Size = UDim2.fromOffset(12, 12) end
-			render(true)
+		morphTok += 1
+		local tok = morphTok
+		fadeElems(1)
+		task.delay(0.18, function()
+			if tok ~= morphTok then return end
+			if randomize then
+				knobB.Visible = true
+				knobA.Position = UDim2.fromScale(pctOf(lo), 0.5)
+				knobB.Position = UDim2.fromScale(pctOf(hi), 0.5)
+				fill.Position = UDim2.fromScale(pctOf(lo), 0)
+				fill.Size = UDim2.fromScale(pctOf(hi) - pctOf(lo), 1)
+				if not editing then valueLabel.Text = format(lo) .. suffix .. "  -  " .. format(hi) .. suffix end
+			else
+				knobA.Position = UDim2.fromScale(pctOf(val), 0.5)
+				fill.Position = UDim2.fromScale(0, 0)
+				fill.Size = UDim2.fromScale(pctOf(val), 1)
+				knobB.Visible = false
+				if not editing then valueLabel.Text = format(val) .. suffix end
+			end
+			fadeElems(0)
+			task.delay(0.18, function()
+				if tok == morphTok then morphing = false end
+			end)
 		end)
+		playSound(SOUND_CLICK, 0.25, on and 1.1 or 0.9)
 		fire(opts.Callback, api:Config())
 	end
 	function api:Config()
@@ -4136,7 +4223,7 @@ function Tab:AddPlayerSearch(opts)
 	if useSearchIcon then
 		new("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Search, ImageColor3 = THEME.Body, ZIndex = 8, Parent = searchBtn,
 		})
 	else
