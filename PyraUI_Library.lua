@@ -1,3 +1,4 @@
+-- dont add any comments
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -61,6 +62,7 @@ local ICONS = {
 	Spectate_Selected = "rbxassetid://77306507937998",
 	Pin_Selected = "rbxassetid://135812284323262",
 	Warning = "rbxassetid://90951955041815",
+	Discord = "rbxassetid://123978857883708",
 }
 
 local function iconOrText(id, fallback)
@@ -444,8 +446,7 @@ function Library.new(config)
 	self.Minimized = false
 	self.ScaleMultiplier = 1
 	self.Connections = {}
-	-- SessionStart: optional Unix epoch (os.time) so the timer can survive server hops.
-	-- When given, elapsed is measured from wall-clock time instead of os.clock().
+
 	self.SessionStart = (type(config.SessionStart) == "number" and config.SessionStart > 0) and config.SessionStart or nil
 	self.IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 	self.AcrylicEnabled = not self.IsMobile
@@ -596,6 +597,7 @@ function Library.new(config)
 		}, { corner(8) })
 		local img
 		if useIcon then
+
 			img = new("ImageLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.fromScale(0.5, 0.5),
@@ -635,14 +637,14 @@ function Library.new(config)
 		Position = UDim2.new(1, -78, 0.5, 0),
 		Size = UDim2.fromOffset(COLLAPSED, 28),
 		BackgroundColor3 = THEME.Card,
-		-- collapsed look matches the minimize/close dock buttons: transparent at rest, reveals on hover
+
 		BackgroundTransparency = 1,
 		ZIndex = 8,
 		Parent = self.Dock,
 	}, { corner(8), stroke(Color3.new(1, 1, 1), 1) })
 	local searchStroke = search:FindFirstChildOfClass("UIStroke")
 	local useSearchIcon = type(ICONS.Search) == "string" and ICONS.Search ~= ""
-	-- collapsed: icon centered in the box; expanded: icon tucked to the right
+
 	local ICON_COLLAPSED_POS = UDim2.new(0.5, 0, 0.5, 0)
 	local ICON_EXPANDED_POS = UDim2.new(1, -6, 0.5, 0)
 	local icon = label({
@@ -699,7 +701,7 @@ function Library.new(config)
 			searchBox.Text = ""
 			searchBox.TextEditable = false
 			searchBox.Visible = false
-			-- collapse back to the transparent dock-button look
+
 			tween(search, 0.3, { Size = UDim2.fromOffset(COLLAPSED, 28), BackgroundTransparency = 1 }, Enum.EasingStyle.Quint)
 			tween(searchStroke, 0.3, { Transparency = 1, Color = Color3.new(1, 1, 1) })
 			tween(icon, 0.2, { TextColor3 = THEME.SubText, Position = ICON_COLLAPSED_POS })
@@ -709,7 +711,6 @@ function Library.new(config)
 	end
 	self._collapseSearch = function() setSearch(false) end
 
-	-- hover reveal while collapsed, exactly like the minimize/close buttons
 	iconBtn.MouseEnter:Connect(function()
 		if not searchOpen then tween(search, 0.2, { BackgroundTransparency = 0.9 }) end
 		if icon then tween(icon, 0.2, { TextColor3 = THEME.Text }) end
@@ -867,9 +868,9 @@ function Library.new(config)
 		):Play()
 	end
 	label({
-		Text = "P R E M I U M", Font = FONT_BOLD, TextSize = 9, TextColor3 = THEME.Accent,
+		Text = "P R E M I U M", Font = FONT_BOLD, TextSize = 11, TextColor3 = THEME.Accent,
 		TextTransparency = 0.25,
-		Position = UDim2.new(0, 70, 0.5, 3), Size = UDim2.fromOffset(0, 12),
+		Position = UDim2.new(0, 70, 0.5, 2), Size = UDim2.fromOffset(0, 14),
 		AutomaticSize = Enum.AutomaticSize.X, ZIndex = 3, Parent = self.Footer,
 	})
 
@@ -949,8 +950,7 @@ function Library.new(config)
 			frameCount, frameClock = 0, now
 			local ok, ping = pcall(function() return player:GetNetworkPing() end)
 			pingValue.Text = ok and (math.floor(ping * 1000 + 0.5) .. " ms") or "-- ms"
-			-- if a persistent SessionStart epoch was passed, measure from wall-clock so the
-			-- timer keeps counting across server hops; otherwise fall back to this run's clock
+
 			local e
 			if self.SessionStart then
 				e = math.max(0, math.floor(os.time() - self.SessionStart))
@@ -985,6 +985,25 @@ function Library.new(config)
 	})
 	self.OpenButtonScale = new("UIScale", { Scale = 0, Parent = self.OpenButton })
 	self.OpenButton.Activated:Connect(function() self:Show() end)
+
+	self.MobileMode = false
+	self.MobileButtons = {}
+	self.MobileHolder = new("Frame", {
+		Name = "MobileOverlay",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 16, 1, -16),
+		Size = UDim2.fromOffset(150, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = self.Gui,
+	}, {
+		new("UIListLayout", {
+			Padding = UDim.new(0, 8),
+			VerticalAlignment = Enum.VerticalAlignment.Bottom,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
 
 	self.NotifyHolder = new("Frame", {
 		Name = "Notifications",
@@ -1057,7 +1076,8 @@ function Library.new(config)
 			local m = UserInputService:GetMouseLocation()
 			local nx = math.clamp((m.X - vp.X / 2) / (vp.X / 2), -1, 1)
 			local ny = math.clamp((m.Y - vp.Y / 2) / (vp.Y / 2), -1, 1)
-			goalParallax = Vector2.new(nx, ny) * PARALLAX_STRENGTH
+
+			goalParallax = Vector2.new(-nx, -ny) * PARALLAX_STRENGTH
 		end
 		local accel = (goalParallax - self.Parallax) * PARALLAX_STIFFNESS - self.ParallaxVelocity * PARALLAX_DAMPING
 		self.ParallaxVelocity += accel * step
@@ -1167,9 +1187,7 @@ end
 function Library:SetMinimized(state)
 	if state == self.Minimized then return end
 	self.Minimized = state
-	-- never set .Text here (it used to overlay a stray "+"/"-" on top of the icon).
-	-- when minimized, show the Close icon tilted 45 degrees so it reads as a "+" (expand);
-	-- otherwise the normal Minimize icon.
+
 	if self.MinButtonIcon then
 		if state then
 			self.MinButtonIcon.Image = ICONS.Close
@@ -1491,8 +1509,7 @@ function Library:CreateSidePanel(opts)
 		shown = false
 		showTok += 1
 		local tok = showTok
-		-- slide and fade together on the SAME curve/duration so it reads as one clean slide-off,
-		-- instead of fading to a ghost and then drifting (the old 0.3 fade / 0.45 slide mismatch)
+
 		local HIDE = TweenInfo.new(0.32, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 		TweenService:Create(root, HIDE, { Position = DOCK_HIDDEN, GroupTransparency = 1 }):Play()
 		task.delay(0.32, function()
@@ -1516,8 +1533,6 @@ function Library:CreateSidePanel(opts)
 		if opts.OnDetach then opts.OnDetach(true) end
 	end
 
-	-- cancel any in-flight Position tween on the panel; a leftover snap tween running after we
-	-- reparent/reposition was what flung the panel to the right edge on reattach
 	local function killPositionTween()
 		TweenService:Create(root, TweenInfo.new(0), { Position = root.Position }):Play()
 	end
@@ -1543,7 +1558,7 @@ function Library:CreateSidePanel(opts)
 		else
 			local home = worldHomePos()
 			tween(root, 0.25, { Position = UDim2.fromOffset(home.X, home.Y) }, Enum.EasingStyle.Quint).Completed:Connect(function()
-				-- only dock if this reattach is still the current one and we didn't re-detach
+
 				if not detached and tok == reattachTok then dock() end
 			end)
 		end
@@ -1681,11 +1696,21 @@ function Library:AddMonitor(key, label_)
 		Size = UDim2.fromOffset(0, 14), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = 2, Parent = cell,
 	})
 
+	local clickBtn = new("TextButton", {
+		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 5, Parent = cell,
+	})
+
 	local win = self
 	local FADE = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local fadeToken = 0
-	local item = { cell = cell, sep = sep, value = valueLabel, shown = false }
+	local item = { cell = cell, sep = sep, value = valueLabel, caption = capLabel, shown = false }
 	function item:Set(v) valueLabel.Text = tostring(v) end
+	function item:SetColor(c)
+		valueLabel.TextColor3 = c or THEME.Text
+	end
+	function item:OnClick(fn)
+		clickBtn.Activated:Connect(function() if type(fn) == "function" then fn() end end)
+	end
 	function item:Show(on)
 		on = on ~= false
 		if on == self.shown then return end
@@ -1728,6 +1753,72 @@ end
 function Library:SetScaleMultiplier(multiplier)
 	self.ScaleMultiplier = math.clamp(tonumber(multiplier) or 1, 0.5, 1.5)
 	if self.Open then tween(self.UIScale, 0.25, { Scale = self:_fitScale() }) end
+end
+
+function Library:AddMobileButton(opts)
+	opts = opts or {}
+	local isToggle = opts.Toggle == true
+	local state = opts.Default == true
+
+	local btn = new("TextButton", {
+		Name = opts.Name or "MobileButton",
+		Size = UDim2.fromOffset(150, 46),
+		BackgroundColor3 = THEME.Glass,
+		BackgroundTransparency = SOLID_T,
+		AutoButtonColor = false,
+		Text = "",
+		LayoutOrder = #self.MobileButtons + 1,
+		Parent = self.MobileHolder,
+	}, { corner(10), stroke(Color3.new(1, 1, 1), 0.85) })
+	local dot
+	if isToggle then
+		dot = new("Frame", {
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0),
+			Size = UDim2.fromOffset(10, 10), BackgroundColor3 = state and STATUS_GREEN or THEME.Switch,
+			BorderSizePixel = 0, Parent = btn,
+		}, { round() })
+	end
+	local lbl = label({
+		Text = opts.Name or "Button", Font = FONT_MEDIUM, TextSize = 13, TextColor3 = THEME.Text,
+		Position = UDim2.fromOffset(isToggle and 30 or 14, 0), Size = UDim2.new(1, -(isToggle and 40 or 24), 1, 0),
+		TextTruncate = Enum.TextTruncate.AtEnd, Parent = btn,
+	})
+
+	local api = {}
+	function api:Get() return state end
+	function api:Set(v, silent)
+		if isToggle then
+			state = v == true
+			if dot then tween(dot, 0.2, { BackgroundColor3 = state and STATUS_GREEN or THEME.Switch }) end
+		end
+
+		if not silent and opts.OnClick then fire(opts.OnClick, isToggle and state or nil) end
+	end
+	function api:SetVisible(v) btn.Visible = v ~= false end
+
+	btn.MouseEnter:Connect(function() tween(btn, 0.15, { BackgroundTransparency = SOLID_T - 0.03 }) end)
+	btn.MouseLeave:Connect(function() tween(btn, 0.15, { BackgroundTransparency = SOLID_T }) end)
+	btn.Activated:Connect(function()
+		playSound(SOUND_CLICK, 0.3, 1.1)
+		if isToggle then api:Set(not state) else api:Set(true) end
+	end)
+
+	table.insert(self.MobileButtons, { api = api, btn = btn })
+	return api
+end
+
+function Library:SetMobileMode(on)
+	self.MobileMode = on == true
+	self.MobileHolder.Visible = self.MobileMode
+end
+
+function Library:SetFPSCap(n)
+	local fn = setfpscap or set_fps_cap or (syn and syn.set_fps_cap)
+	if type(fn) ~= "function" then return false end
+	n = tonumber(n) or 0
+	if n <= 0 then n = 1e6 end
+	pcall(fn, n)
+	return true
 end
 
 function Library:SetAcrylic(state)
@@ -1786,7 +1877,7 @@ function Library:Notify(title, text, durationOrOpts)
 		LayoutOrder = 1,
 		Parent = card,
 	})
-	-- BareIcon: drop the circular plate and let the icon fill the slot (used by warning toasts)
+
 	local bareIcon = opts.BareIcon == true
 	local avatar = new("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -2217,6 +2308,39 @@ function Library:AddTab(name, tabOpts)
 	return tab
 end
 
+function Library:AddTabIcon(iconId, onClick, size)
+	size = size or 22
+	local holder = new("TextButton", {
+		Name = "TabIcon",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 108 + (self.TabBarWidth or 0) + 6, 0.5, 0),
+		Size = UDim2.fromOffset(size + 8, size + 8),
+		BackgroundTransparency = 1,
+		AutoButtonColor = false,
+		Text = "",
+		ZIndex = 4,
+		Parent = self.Dock,
+	})
+	local img = new("ImageLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(size, size),
+		BackgroundTransparency = 1,
+		Image = iconId,
+		ImageColor3 = THEME.SubText,
+		ScaleType = Enum.ScaleType.Fit,
+		ZIndex = 5,
+		Parent = holder,
+	})
+	holder.MouseEnter:Connect(function() tween(img, 0.15, { ImageColor3 = THEME.Text }) end)
+	holder.MouseLeave:Connect(function() tween(img, 0.15, { ImageColor3 = THEME.SubText }) end)
+	holder.Activated:Connect(function()
+		playSound(SOUND_CLICK, 0.25, 1.1)
+		if type(onClick) == "function" then pcall(onClick) end
+	end)
+	return holder
+end
+
 function Library:SelectTab(tab, instant)
 	if self._searchActive then
 		self._searchActive = false
@@ -2486,8 +2610,7 @@ function Tab:AddSection(text, opts)
 		ZIndex = 4,
 		Parent = self.Container,
 	})
-	-- when there's an icon, vertically center the label on the icon instead of bottom-aligning
-	-- (bottom-align made the text look shifted relative to the icon)
+
 	local lbl = label({
 		Text = string.upper(text), Font = FONT_BOLD, TextSize = 10,
 		TextColor3 = opts.Color or (self.Accent == THEME.Accent and THEME.SubText or self.Accent),
@@ -2685,9 +2808,7 @@ function Tab:AddToggle(opts)
 	local bigIcon
 	local switch, knob
 	if iconToggle then
-		-- Bigger icon, and centered on the same vertical axis as the switch toggles
-		-- (switch is 40 wide anchored at -12, so its center sits at -32 from the right edge;
-		--  a 32-wide icon therefore anchors at -16 to share that center line).
+
 		bigIcon = new("ImageLabel", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -15, 0.5, 0),
@@ -2754,6 +2875,7 @@ function Tab:AddToggle(opts)
 	end
 
 	local api = {}
+	local changedListeners = {}
 	function api:Set(value, silent)
 		value = value == true
 		if value == state then return end
@@ -2763,8 +2885,13 @@ function Tab:AddToggle(opts)
 			playSound(state and SOUND_TOGGLE_ON or SOUND_TOGGLE_OFF, 0.35, state and 1 or 0.85)
 		end
 		fire(opts.Callback, state)
+		for _, fn in ipairs(changedListeners) do fire(fn, state) end
 	end
 	function api:Get() return state end
+
+	function api:OnChanged(fn)
+		if type(fn) == "function" then table.insert(changedListeners, fn) end
+	end
 
 	hit.Activated:Connect(function() api:Set(not state) end)
 
@@ -2973,7 +3100,7 @@ function Tab:AddToggle(opts)
 		local arrUseIcon = type(ICONS.Arrow) == "string" and ICONS.Arrow ~= ""
 		local arr
 		if arrUseIcon then
-			-- tighter box so the arrow sits next to the text instead of leaving a gap
+
 			arr = new("ImageLabel", {
 				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -7, 0.5, 0),
 				Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1,
@@ -3233,6 +3360,10 @@ function Tab:AddSlider(opts)
 	local editing = false
 
 	local function format(v)
+		if type(opts.Format) == "function" then
+			local ok, out = pcall(opts.Format, v)
+			if ok and out ~= nil then return tostring(out) end
+		end
 		if decimals > 0 then return string.format("%." .. decimals .. "f", v) end
 		return tostring(math.floor(v + 0.5))
 	end
@@ -3927,7 +4058,7 @@ function Tab:AddRandomSlider(opts)
 	end
 
 	local FADE = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	-- fade ONLY the inner dots during the morph; the bar, knobs and label stay solid
+
 	local function fadeElems(targetT)
 		for _, k in ipairs({ knobA, knobB }) do
 			local dot = k:FindFirstChildOfClass("Frame")
@@ -3946,7 +4077,7 @@ function Tab:AddRandomSlider(opts)
 		morphing = true
 		morphTok += 1
 		local tok = morphTok
-		-- fade the dots out, slide everything to the new layout, fade the dots back in
+
 		fadeElems(1)
 		local MT = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 		if randomize then
@@ -4311,14 +4442,15 @@ function Tab:AddPlayerSearch(opts)
 	local box = new("TextBox", {
 		Position = UDim2.new(0, 12, 0, 8),
 		Size = UDim2.new(1, -52, 0, 24),
-		BackgroundColor3 = THEME.Card,
-		BackgroundTransparency = 0.92,
+
+		BackgroundColor3 = THEME.Glass,
+		BackgroundTransparency = 0.25,
 		ClearTextOnFocus = false,
 		Font = FONT,
 		TextSize = 12,
 		TextColor3 = THEME.Text,
 		PlaceholderText = opts.Placeholder or "Search a player...",
-		PlaceholderColor3 = THEME.Muted,
+		PlaceholderColor3 = Color3.new(1, 1, 1),
 		Text = "",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -4326,6 +4458,22 @@ function Tab:AddPlayerSearch(opts)
 		Parent = frame,
 	}, { corner(6), stroke(Color3.new(1, 1, 1), 0.85), pad(0, 8, 0, 8) })
 	local boxStroke = box:FindFirstChildOfClass("UIStroke")
+
+	local focusBlocker = new("TextButton", {
+		Position = box.Position,
+		Size = box.Size,
+		BackgroundTransparency = 1,
+		Text = "",
+		Visible = false,
+		ZIndex = 9,
+		Parent = frame,
+	})
+	box.Focused:Connect(function() focusBlocker.Visible = true end)
+	box.FocusLost:Connect(function() focusBlocker.Visible = false end)
+	focusBlocker.Activated:Connect(function()
+		box:ReleaseFocus()
+		focusBlocker.Visible = false
+	end)
 
 	local searchBtn = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
