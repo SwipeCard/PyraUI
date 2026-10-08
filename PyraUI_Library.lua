@@ -1611,9 +1611,11 @@ function Library:CreateSidePanel(opts)
 		end)
 	end
 	function panel:SetTitle(t) title.Text = t end
-	function panel:SetStat(key, value)
+	function panel:SetStat(key, value, color)
 		if not rows[key] then addStat(key) end
-		rows[key].Text = tostring(value)
+		local r = rows[key]
+		r.Text = tostring(value)
+		r.TextColor3 = color or THEME.Text
 	end
 	function panel:ClearAvatar() avatar.Image = DEFAULT_AVATAR end
 
@@ -3334,9 +3336,7 @@ function Tab:AddToggle(opts)
 		local chipState = opts.ChipDefault == true
 		local chipW = type(opts.Chip) == "string" and (#opts.Chip > 3) and (18 + #opts.Chip * 6) or 42
 		local chipX = hasKey and -60 or -60
-		local chip = new("TextButton", {
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, chipX, 0.5, 0),
+		local chipProps = {
 			Size = UDim2.fromOffset(chipW, 20),
 			BackgroundColor3 = chipState and self.Accent or THEME.Switch,
 			AutoButtonColor = false,
@@ -3346,7 +3346,15 @@ function Tab:AddToggle(opts)
 			Text = opts.Chip,
 			ZIndex = 7,
 			Parent = frame,
-		}, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
+		}
+		if inlineRow then
+			chipProps.LayoutOrder = 2
+			chipProps.Parent = inlineRow
+		else
+			chipProps.AnchorPoint = Vector2.new(1, 0.5)
+			chipProps.Position = UDim2.new(1, chipX, 0.5, 0)
+		end
+		local chip = new("TextButton", chipProps, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
 		local function chrender()
 			tween(chip, 0.2, { BackgroundColor3 = chipState and self.Accent or THEME.Switch })
 			chip.TextColor3 = chipState and self.AccentInverse or THEME.Text
@@ -3942,12 +3950,23 @@ function Tab:AddDropdown(opts)
 			ZIndex = 5,
 			Parent = list,
 		}, { corner(5) })
+		local numbered = tonumber(opts.NumberStart)
 		local l = label({
 			Text = tostring(option), TextSize = 12, TextColor3 = THEME.SubText,
-			Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -28, 1, 0), ZIndex = 5, Parent = b,
+			Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, numbered and -46 or -28, 1, 0),
+			ZIndex = 5, Parent = b,
 		})
+		if numbered then
+			label({
+				Text = tostring(numbered + i - 1), Font = FONT_BOLD, TextSize = 10,
+				TextColor3 = THEME.Muted,
+				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
+				Size = UDim2.fromOffset(14, 14), TextXAlignment = Enum.TextXAlignment.Right,
+				ZIndex = 5, Parent = b,
+			})
+		end
 		local dot = new("Frame", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, numbered and -28 or -10, 0.5, 0),
 			Size = UDim2.fromOffset(5, 5), BackgroundColor3 = self.Accent,
 			BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 5, Parent = b,
 		}, { round() })
@@ -4990,6 +5009,10 @@ function Tab:AddPlayerSearch(opts)
 	local focusGuard = false
 	box.Focused:Connect(function()
 		focusGuard = true
+		if box.Text ~= "" then
+			box.Text = ""
+			rebuild("")
+		end
 		api:Open()
 		task.delay(0.1, function() focusGuard = false end)
 	end)
