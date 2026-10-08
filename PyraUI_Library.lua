@@ -1,4 +1,3 @@
--- dont add any comments
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -130,10 +129,6 @@ local function playSound(id, volume, pitch)
 	end
 end
 
--- TweenInfos are immutable and reusable, so they are cached by
--- time/style/direction. Hover and toggle tweens fire constantly; this keeps each
--- one from allocating a throwaway TweenInfo. Nested tables avoid building a
--- string key (which would just move the allocation, not remove it).
 local tweenInfoCache = {}
 local function getTweenInfo(time, style, direction)
 	local byStyle = tweenInfoCache[time]
@@ -160,8 +155,6 @@ end
 local function new(className, props, children)
 	local inst = Instance.new(className)
 	local parent
-	-- `props or {}` / `children or {}` would allocate a throwaway table on every
-	-- call with a nil argument, and this runs hundreds of times building a window.
 	if props then
 		for k, v in pairs(props) do
 			if k == "Parent" then parent = v else inst[k] = v end
@@ -213,6 +206,62 @@ end
 local function isMove(input)
 	return input.UserInputType == Enum.UserInputType.MouseMovement
 		or input.UserInputType == Enum.UserInputType.Touch
+end
+
+local function dragBus(window)
+	local bus = window._DragBus
+	if bus then return bus end
+	bus = {}
+	window._DragBus = bus
+	table.insert(window.Connections, UserInputService.InputChanged:Connect(function(input)
+		local a = bus.active
+		if a and isMove(input) then a.move(input) end
+	end))
+	table.insert(window.Connections, UserInputService.InputEnded:Connect(function(input)
+		local a = bus.active
+		if a and isPress(input) then
+			bus.active = nil
+			if a.stop then a.stop() end
+		end
+	end))
+	return bus
+end
+
+local function beginDrag(window, move, stop)
+	local bus = dragBus(window)
+	local prev = bus.active
+	if prev and prev.stop then prev.stop() end
+	bus.active = { move = move, stop = stop }
+end
+
+local function keyBus(window)
+	local bus = window._KeyBus
+	if bus then return bus end
+	bus = { handlers = {} }
+	window._KeyBus = bus
+	table.insert(window.Connections, UserInputService.InputBegan:Connect(function(input, processed)
+		if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+		local cap = bus.capture
+		if cap then
+			bus.capture = nil
+			cap(input.KeyCode)
+			return
+		end
+		if processed then return end
+		local list = bus.handlers
+		for i = 1, #list do list[i](input.KeyCode) end
+	end))
+	return bus
+end
+
+local function beginCapture(window, onKey)
+	local bus = keyBus(window)
+	bus.capture = onKey
+end
+
+local function onKeyPressed(window, fn)
+	local bus = keyBus(window)
+	table.insert(bus.handlers, fn)
 end
 local function fire(callback, ...)
 	if type(callback) ~= "function" then return end
@@ -319,10 +368,6 @@ local function createAcrylic(frame)
 	part.Parent = workspace
 
 	local obj = { Part = part, Visible = false }
-	-- Update() runs every frame for every glass panel, so it caches its inputs:
-	-- an unchanged frame + camera costs a few comparisons instead of 3 screen
-	-- rays, 2 square roots and 2 part-property writes. The inset only depends on
-	-- viewport height, so it is recomputed just when the viewport changes.
 	local lastT, lastCF, lastPos, lastSize, lastVpY, cachedInset
 	function obj:Update()
 		if not self.Visible or not frame.Visible or frame.AbsoluteSize.X < 4 or frame.AbsoluteSize.Y < 4 then
@@ -765,10 +810,6 @@ function Library.new(config)
 		if self.Minimized then self:SetMinimized(false) end
 		if searchOpen then searchBox:CaptureFocus() else setSearch(true) end
 	end)
-	-- Rebuilding the result list destroys and recreates an instance set per
-	-- match, so a fast typist would rebuild it once per character. The stroke
-	-- and page swap stay immediate (those are what the eye tracks); only the
-	-- list rebuild is coalesced onto the last keystroke of a burst.
 	local searchToken = 0
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		local q = searchBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
@@ -1002,9 +1043,6 @@ function Library.new(config)
 	task.spawn(function()
 		while not self.Destroyed do
 			local now = os.clock()
-			-- These chips only exist on the open window. While it is closed, skip the
-			-- formatting, the ping call and the property writes; just keep the frame
-			-- window rolling so the first reading after reopening is still accurate.
 			if not self.Open then
 				frameCount, frameClock = 0, now
 				task.wait(0.75)
@@ -1144,11 +1182,6 @@ function Library.new(config)
 			goalParallax = Vector2.new(-nx, -ny) * PARALLAX_STRENGTH
 		end
 
-		-- Idle fast-path. Once the spring has settled and the window sits on its
-		-- target there is nothing left to animate, so snap the residual sub-pixel
-		-- error away and skip the spring maths, the Lerp and the position writes.
-		-- Any change to TargetPosition or the parallax goal fails these checks on
-		-- the next frame and the loop resumes on its own.
 		local b, t = self.Base, self.TargetPosition
 		if b.X.Scale == t.X.Scale and b.Y.Scale == t.Y.Scale
 			and math.abs(b.X.Offset - t.X.Offset) < 0.5
@@ -1585,7 +1618,6 @@ function Library:CreateSidePanel(opts)
 		if shown then target = dockTopLeft() end
 		local cur = root.AbsolutePosition
 		local dx, dy = target.X - cur.X, target.Y - cur.Y
-		-- Parked: snap the last sub-pixel and stop writing Position every frame.
 		if dx * dx + dy * dy < 0.25 then
 			local rest = UDim2.fromOffset(target.X, target.Y)
 			if rest ~= root.Position then root.Position = rest end
@@ -2147,8 +2179,6 @@ function Library:_index(tab, frame, name, desc)
 	table.insert(self.SearchIndex, {
 		name = name,
 		text = text,
-		-- Precomputed so filtering does not allocate a lowercased copy of every
-		-- indexed entry on every keystroke.
 		lower = text:lower(),
 		tab = tab.Name,
 		tabRef = tab,
@@ -3067,14 +3097,14 @@ function Tab:AddToggle(opts)
 			sdrag = true
 			playSound(SOUND_CLICK, 0.22, 1.1)
 			tween(sknob, 0.2, { Size = UDim2.fromOffset(16, 16) }, Enum.EasingStyle.Back)
+			beginDrag(self.Window, function(i)
+				sFromX(i.Position.X)
+			end, function()
+				sdrag = false
+				tween(sknob, 0.2, { Size = UDim2.fromOffset(12, 12) })
+			end)
 			sFromX(input.Position.X)
 		end)
-		table.insert(self.Window.Connections, UserInputService.InputChanged:Connect(function(input)
-			if sdrag and isMove(input) then sFromX(input.Position.X) end
-		end))
-		table.insert(self.Window.Connections, UserInputService.InputEnded:Connect(function(input)
-			if sdrag and isPress(input) then sdrag = false tween(sknob, 0.2, { Size = UDim2.fromOffset(12, 12) }) end
-		end))
 		srender(true)
 	end
 
@@ -3106,18 +3136,16 @@ function Tab:AddToggle(opts)
 			crender()
 			playSound(SOUND_CLICK, 0.25, 1.1)
 			tween(chipStroke, 0.2, { Transparency = 0.3 })
+			beginCapture(self.Window, function(keyCode)
+				listening = false
+				tween(chipStroke, 0.2, { Transparency = 0.85 })
+				if keyCode ~= Enum.KeyCode.Escape then
+					key = keyCode
+					fire(opts.KeybindChanged, key)
+				end
+				crender()
+			end)
 		end)
-		table.insert(self.Window.Connections, UserInputService.InputBegan:Connect(function(input, processed)
-			if not listening then return end
-			if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-			listening = false
-			tween(chipStroke, 0.2, { Transparency = 0.85 })
-			if input.KeyCode ~= Enum.KeyCode.Escape then
-				key = input.KeyCode
-				fire(opts.KeybindChanged, key)
-			end
-			crender()
-		end))
 		crender()
 		keyChipRef = chip
 		api.Keybind = { Get = function() return key end, Set = function(_, k) key = k crender() end }
@@ -3272,6 +3300,9 @@ function Tab:AddToggle(opts)
 		end
 
 		local posConn
+		self.Window:OnDestroy(function()
+			if posConn then posConn:Disconnect() posConn = nil end
+		end)
 		function api:SetDropOpen(open)
 			isOpen = open
 			playSound(SOUND_CLICK, 0.2, open and 1.05 or 0.95)
@@ -3509,8 +3540,6 @@ function Tab:AddSlider(opts)
 	end
 	function api:Get() return value end
 
-	-- Optional chip on the slider's header row (sits just left of the value
-	-- readout, beside the name) — a small inline toggle, same look as AddToggle's.
 	if type(opts.Chip) == "string" then
 		local chipState = opts.ChipDefault == true
 		local chipW = (#opts.Chip > 3) and (18 + #opts.Chip * 6) or 42
@@ -3564,18 +3593,15 @@ function Tab:AddSlider(opts)
 		playSound(SOUND_CLICK, 0.25, 1.1)
 		tween(knob, 0.25, { Size = UDim2.fromOffset(16, 16) }, Enum.EasingStyle.Back)
 		tween(valueLabel, 0.2, { TextColor3 = THEME.Text })
-		setFromX(input.Position.X)
-	end)
-	table.insert(self.Window.Connections, UserInputService.InputChanged:Connect(function(input)
-		if dragging and isMove(input) then setFromX(input.Position.X) end
-	end))
-	table.insert(self.Window.Connections, UserInputService.InputEnded:Connect(function(input)
-		if dragging and isPress(input) then
+		beginDrag(self.Window, function(i)
+			setFromX(i.Position.X)
+		end, function()
 			dragging = false
 			tween(knob, 0.25, { Size = UDim2.fromOffset(12, 12) })
 			if not editing then tween(valueLabel, 0.2, { TextColor3 = THEME.SubText }) end
-		end
-	end))
+		end)
+		setFromX(input.Position.X)
+	end)
 
 	valueLabel.Focused:Connect(function()
 		editing = true
@@ -3787,21 +3813,11 @@ function Tab:AddDropdown(opts)
 end
 
 local function trackDrag(window, target, onMove, onEnd)
-	local dragging = false
 	target.InputBegan:Connect(function(input)
 		if not isPress(input) then return end
-		dragging = true
+		beginDrag(window, function(i) onMove(i.Position, false) end, onEnd)
 		onMove(input.Position, true)
 	end)
-	table.insert(window.Connections, UserInputService.InputChanged:Connect(function(input)
-		if dragging and isMove(input) then onMove(input.Position, false) end
-	end))
-	table.insert(window.Connections, UserInputService.InputEnded:Connect(function(input)
-		if dragging and isPress(input) then
-			dragging = false
-			if onEnd then onEnd() end
-		end
-	end))
 end
 
 function Tab:AddColorPicker(opts)
@@ -4376,24 +4392,21 @@ function Tab:AddKeybind(opts)
 		render()
 		playSound(SOUND_CLICK, 0.25, 1.1)
 		tween(chipStroke, 0.2, { Transparency = 0.3 })
+		beginCapture(self.Window, function(keyCode)
+			listening = false
+			tween(chipStroke, 0.2, { Transparency = 0.85 })
+			if keyCode == Enum.KeyCode.Escape then
+				if opts.AllowNone == false then render() else api:Set(nil) end
+			else
+				api:Set(keyCode)
+			end
+		end)
 	end)
 	hoverable(frame, keyChip)
 
-	table.insert(self.Window.Connections, UserInputService.InputBegan:Connect(function(input, processed)
-		if listening then
-			if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-			listening = false
-			tween(chipStroke, 0.2, { Transparency = 0.85 })
-			if input.KeyCode == Enum.KeyCode.Escape then
-				if opts.AllowNone == false then render() else api:Set(nil) end
-			else
-				api:Set(input.KeyCode)
-			end
-			return
-		end
-		if processed or not key then return end
-		if input.KeyCode == key then fire(opts.Callback, key) end
-	end))
+	onKeyPressed(self.Window, function(keyCode)
+		if key and keyCode == key then fire(opts.Callback, key) end
+	end)
 
 	render()
 	return api
