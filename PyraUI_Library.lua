@@ -16,26 +16,35 @@ local function raiseIdentity()
 	if type(get) ~= "function" or type(set) ~= "function" then return nil, nil end
 	local ok, old = pcall(get)
 	if not ok or type(old) ~= "number" then return nil, nil end
-	if old < 2 then pcall(set, 2) end
+	if old < 3 then pcall(set, 3) end
 	return set, old
 end
 
 local function restoreIdentity(set, old)
-	if set and old and old < 2 then pcall(set, old) end
+	if set and old and old < 3 then pcall(set, old) end
 end
 
+local GUI_PARENT_KIND = "unknown"
 local function getGuiParent()
 	if RunService:IsStudio() then
+		GUI_PARENT_KIND = "PlayerGui (Studio)"
 		return player:WaitForChild("PlayerGui")
 	end
 	if typeof(gethui) == "function" then
 		local ok, hui = pcall(gethui)
-		if ok and hui then return hui end
+		if ok and hui then
+			GUI_PARENT_KIND = "gethui"
+			return hui
+		end
 	end
 	local set, old = raiseIdentity()
 	local ok = pcall(function() return CoreGui:GetChildren() end)
 	restoreIdentity(set, old)
-	if ok then return CoreGui end
+	if ok then
+		GUI_PARENT_KIND = "CoreGui"
+		return CoreGui
+	end
+	GUI_PARENT_KIND = "PlayerGui (fallback - detectable)"
 	return player:WaitForChild("PlayerGui")
 end
 
@@ -1085,7 +1094,7 @@ function Library.new(config)
 	local sessionValue = chip("SESSION", "00:00:00")
 
 	local sessionStart = os.clock()
-	local frameCount, frameClock = 0, os.clock()
+	local frameCount, frameT0 = 0, os.clock()
 	table.insert(self.Connections, RunService.RenderStepped:Connect(function()
 		frameCount += 1
 	end))
@@ -1093,11 +1102,11 @@ function Library.new(config)
 		while not self.Destroyed do
 			local now = os.clock()
 			if not self.Open then
-				frameCount, frameClock = 0, now
+				frameCount, frameT0 = 0, now
 				task.wait(0.75)
 			else
-				fpsValue.Text = tostring(math.floor(frameCount / math.max(now - frameClock, 1e-3) + 0.5))
-				frameCount, frameClock = 0, now
+				fpsValue.Text = tostring(math.floor(frameCount / math.max(now - frameT0, 1e-3) + 0.5))
+				frameCount, frameT0 = 0, now
 				local ok, ping = pcall(function() return player:GetNetworkPing() end)
 				pingValue.Text = ok and (math.floor(ping * 1000 + 0.5) .. " ms") or "-- ms"
 
@@ -1276,6 +1285,7 @@ function Library.new(config)
 
 	self.Gui.Parent = guiParent
 	protect(self.Gui)
+	self.GuiParentKind = GUI_PARENT_KIND
 
 	_G.__PYRA_ACTIVE = self
 
@@ -5110,5 +5120,6 @@ function Tab:AddPlayerSearch(opts)
 end
 
 Library.Icons = ICONS
+Library.GuiParentKind = function() return GUI_PARENT_KIND end
 
 return Library
