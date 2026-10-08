@@ -4,7 +4,6 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local SoundService = game:GetService("SoundService")
-local GuiService = game:GetService("GuiService")
 local CoreGui = game:GetService("CoreGui")
 local TextService = game:GetService("TextService")
 
@@ -340,6 +339,15 @@ end
 
 local function mapRange(v, inMin, inMax, outMin, outMax)
 	return (v - inMin) * (outMax - outMin) / (inMax - inMin) + outMin
+end
+
+local function moveAbs(inst, v)
+	local ap = inst.AbsolutePosition
+	local p = inst.Position
+	inst.Position = UDim2.fromOffset(
+		p.X.Offset + (v.X - ap.X),
+		p.Y.Offset + (v.Y - ap.Y)
+	)
 end
 
 local function screenToWorld(point, distance)
@@ -772,9 +780,19 @@ function Library.new(config)
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 10, Parent = search,
 	})
 
+	local function setTabIconsHidden(hidden)
+		if not self.TabIcons then return end
+		for _, e in ipairs(self.TabIcons) do
+			e.holder.Active = not hidden
+			e.holder.AutoButtonColor = false
+			tween(e.img, 0.2, { ImageTransparency = hidden and 1 or 0 })
+		end
+	end
+
 	local function setSearch(open)
 		if open == searchOpen then return end
 		searchOpen = open
+		setTabIconsHidden(open)
 		if open then
 			searchBox.Visible = true
 			searchBox.TextEditable = true
@@ -1095,7 +1113,7 @@ function Library.new(config)
 		Name = "MobileOverlay",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 16, 1, -16),
-		Size = UDim2.fromOffset(150, 0),
+		Size = UDim2.fromOffset(196, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		Visible = false,
@@ -1603,21 +1621,17 @@ function Library:CreateSidePanel(opts)
 	local dragging = false
 	local target = Vector2.new()
 
-	local function originOffset()
-		if win.Gui.IgnoreGuiInset then return Vector2.zero end
-		local ok, ins = pcall(function() return GuiService:GetGuiInset() end)
-		if ok and ins then return Vector2.new(ins.X, ins.Y) end
-		return Vector2.zero
-	end
-	local function setAbs(v)
-		local o = originOffset()
-		root.Position = UDim2.fromOffset(v.X - o.X, v.Y - o.Y)
-	end
+	local function setAbs(v) moveAbs(root, v) end
 
+	local lastDock = nil
 	local function dockTopLeft()
 		local h = win.Holder
 		local hp, hs = h.AbsolutePosition, h.AbsoluteSize
-		return Vector2.new(hp.X + hs.X + 16, hp.Y + hs.Y / 2 - root.AbsoluteSize.Y / 2)
+		if hs.X < 8 or hs.Y < 8 then
+			return lastDock or Vector2.new(hp.X + 16, hp.Y)
+		end
+		lastDock = Vector2.new(hp.X + hs.X + 16, hp.Y + hs.Y / 2 - root.AbsoluteSize.Y / 2)
+		return lastDock
 	end
 
 	local function hideTopLeft()
@@ -1637,11 +1651,12 @@ function Library:CreateSidePanel(opts)
 		local cur = root.AbsolutePosition
 		local dx, dy = target.X - cur.X, target.Y - cur.Y
 		if dx * dx + dy * dy < 0.25 then
-			setAbs(target)
+			if dx ~= 0 or dy ~= 0 then setAbs(target) end
 			return
 		end
 		local a = math.clamp(dt * 16, 0, 1)
-		setAbs(Vector2.new(cur.X + dx * a, cur.Y + dy * a))
+		local p = root.Position
+		root.Position = UDim2.fromOffset(p.X.Offset + dx * a, p.Y.Offset + dy * a)
 	end)
 	table.insert(self.Connections, driveConn)
 
@@ -1744,14 +1759,42 @@ function Library:CreateSidePanel(opts)
 		local t = panel._homeTab or win.ActiveTab
 		return (t and t.Accent) or THEME.Accent
 	end
+
+	local ghost = new("Frame", {
+		Name = "SidePanelDock",
+		Size = UDim2.fromOffset(W, 120),
+		BackgroundColor3 = THEME.Glass,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 78,
+		Parent = self.Gui,
+	}, { corner(12), stroke(Color3.new(1, 1, 1), 1) })
+	local ghostStroke = ghost:FindFirstChildOfClass("UIStroke")
+
 	local function setSnapHint(on)
 		if on == snapLit then return end
 		snapLit = on
-		if not rootStroke then return end
-		tween(rootStroke, 0.15, {
-			Color = on and snapColor() or Color3.new(1, 1, 1),
-			Transparency = on and 0.25 or 0.88,
-		})
+		local c = snapColor()
+		if rootStroke then
+			tween(rootStroke, 0.15, {
+				Color = on and c or Color3.new(1, 1, 1),
+				Transparency = on and 0.25 or 0.88,
+			})
+		end
+		if on then
+			ghost.Size = UDim2.fromOffset(W, math.max(60, root.AbsoluteSize.Y))
+			ghost.Visible = true
+			moveAbs(ghost, dockTopLeft())
+			ghost.BackgroundColor3 = c
+			ghostStroke.Color = c
+			tween(ghost, 0.15, { BackgroundTransparency = 0.9 })
+			tween(ghostStroke, 0.15, { Transparency = 0.35 })
+		else
+			tween(ghost, 0.15, { BackgroundTransparency = 1 })
+			tween(ghostStroke, 0.15, { Transparency = 1 })
+			task.delay(0.16, function() if not snapLit then ghost.Visible = false end end)
+		end
 	end
 
 	dragHandle.InputBegan:Connect(function(input)
@@ -1829,7 +1872,7 @@ function Library:AddMonitor(key, label_)
 		Parent = self.MonitorBar,
 	})
 	local cell = new("Frame", {
-		Size = UDim2.fromOffset(0, 1),
+		Size = UDim2.fromOffset(0, 24),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundTransparency = 1,
 		Visible = false,
@@ -1837,7 +1880,7 @@ function Library:AddMonitor(key, label_)
 		Parent = self.MonitorBar,
 	})
 	local content = new("Frame", {
-		Size = UDim2.fromOffset(0, 24),
+		Size = UDim2.new(0, 0, 1, 0),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundTransparency = 1,
 		Parent = cell,
@@ -1927,27 +1970,36 @@ function Library:AddMobileButton(opts)
 
 	local btn = new("TextButton", {
 		Name = opts.Name or "MobileButton",
-		Size = UDim2.fromOffset(150, 46),
+		Size = UDim2.fromOffset(196, isToggle and 66 or 52),
 		BackgroundColor3 = THEME.Glass,
 		BackgroundTransparency = SOLID_T,
 		AutoButtonColor = false,
 		Text = "",
 		LayoutOrder = #self.MobileButtons + 1,
 		Parent = self.MobileHolder,
-	}, { corner(10), stroke(Color3.new(1, 1, 1), 0.85) })
-	local dot
+	}, { corner(12), stroke(Color3.new(1, 1, 1), 0.85) })
+	local dot, stateLbl
 	if isToggle then
 		dot = new("Frame", {
-			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0),
-			Size = UDim2.fromOffset(10, 10), BackgroundColor3 = state and STATUS_GREEN or THEME.Switch,
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0),
+			Size = UDim2.fromOffset(12, 12), BackgroundColor3 = state and STATUS_GREEN or THEME.Switch,
 			BorderSizePixel = 0, Parent = btn,
 		}, { round() })
 	end
 	local lbl = label({
-		Text = opts.Name or "Button", Font = FONT_MEDIUM, TextSize = 13, TextColor3 = THEME.Text,
-		Position = UDim2.fromOffset(isToggle and 30 or 14, 0), Size = UDim2.new(1, -(isToggle and 40 or 24), 1, 0),
+		Text = opts.Name or "Button", Font = FONT_BOLD, TextSize = 15, TextColor3 = THEME.Text,
+		Position = UDim2.fromOffset(isToggle and 38 or 16, isToggle and 11 or 0),
+		Size = UDim2.new(1, -(isToggle and 52 or 32), 0, isToggle and 20 or 52),
 		TextTruncate = Enum.TextTruncate.AtEnd, Parent = btn,
 	})
+	if isToggle then
+		stateLbl = label({
+			Text = state and "ON" or "OFF", Font = FONT_BOLD, TextSize = 12,
+			TextColor3 = state and STATUS_GREEN or THEME.Muted,
+			Position = UDim2.fromOffset(38, 33), Size = UDim2.new(1, -52, 0, 18),
+			Parent = btn,
+		})
+	end
 
 	local api = {}
 	function api:Get() return state end
@@ -1955,6 +2007,11 @@ function Library:AddMobileButton(opts)
 		if isToggle then
 			state = v == true
 			if dot then tween(dot, 0.2, { BackgroundColor3 = state and STATUS_GREEN or THEME.Switch }) end
+			if stateLbl then
+				stateLbl.Text = state and "ON" or "OFF"
+				tween(stateLbl, 0.2, { TextColor3 = state and STATUS_GREEN or THEME.Muted })
+			end
+			tween(btn, 0.2, { BackgroundTransparency = state and (SOLID_T - 0.05) or SOLID_T })
 		end
 
 		if not silent and opts.OnClick then fire(opts.OnClick, isToggle and state or nil) end
@@ -2505,6 +2562,8 @@ function Library:AddTabIcon(iconId, onClick, size)
 		playSound(SOUND_CLICK, 0.25, 1.1)
 		if type(onClick) == "function" then pcall(onClick) end
 	end)
+	self.TabIcons = self.TabIcons or {}
+	table.insert(self.TabIcons, { holder = holder, img = img })
 	return holder
 end
 
