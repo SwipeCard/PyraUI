@@ -1462,15 +1462,12 @@ function Library:_refreshMonitorSeparators()
 		bar.Position = self.MonitorHome + UDim2.fromOffset(0, -10)
 		tween(bar, 0.3, { Position = self.MonitorHome }, Enum.EasingStyle.Back)
 	elseif not any and bar.Visible then
-		tween(bar, 0.25, { Position = self.MonitorHome + UDim2.fromOffset(0, -10) })
-		task.delay(0.25, function()
-			local still = false
-			for _, it in ipairs(self.MonitorOrder) do if it.shown then still = true break end end
-			if not still then
-				bar.Visible = false
-				bar.Position = self.MonitorHome
-			end
-		end)
+		bar.Visible = false
+		bar.Position = self.MonitorHome
+		if self.MonitorAcrylic then
+			self.MonitorAcrylic.Visible = false
+			pcall(function() self.MonitorAcrylic:Update() end)
+		end
 	end
 end
 
@@ -2041,6 +2038,8 @@ function Library:SetMobileMode(on)
 end
 
 function Library:SetFPSCap(n)
+	n = tonumber(n) or 0
+	if n <= 0 then n = 1e6 end
 	local env = (type(getgenv) == "function") and getgenv() or nil
 	local fn = setfpscap
 		or set_fps_cap
@@ -2049,11 +2048,18 @@ function Library:SetFPSCap(n)
 		or (env and (env.setfpscap or env.set_fps_cap or env.setfpslimit or env.set_fps_limit))
 		or (syn and syn.set_fps_cap)
 		or (fluxus and (fluxus.setfpscap or fluxus.set_fps_cap))
-	if type(fn) ~= "function" then return false end
-	n = tonumber(n) or 0
-	if n <= 0 then n = 1e6 end
-	local ok = pcall(fn, n)
-	return ok
+	if type(fn) == "function" and pcall(fn, n) then return true, "executor" end
+
+	local okSettings = pcall(function() settings().Rendering.FramerateCap = n end)
+	if okSettings then return true, "settings" end
+
+	if type(setfflag) == "function" then
+		local capped = math.min(math.floor(n), 10000)
+		if pcall(setfflag, "DFIntTaskSchedulerTargetFps", tostring(capped)) then
+			return true, "fflag"
+		end
+	end
+	return false
 end
 
 function Library:SetAcrylic(state)
