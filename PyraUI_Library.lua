@@ -3422,6 +3422,42 @@ function Tab:AddSlider(opts)
 	end
 	function api:Get() return value end
 
+	-- Optional chip on the slider's header row (sits just left of the value
+	-- readout, beside the name) — a small inline toggle, same look as AddToggle's.
+	if type(opts.Chip) == "string" then
+		local chipState = opts.ChipDefault == true
+		local chipW = (#opts.Chip > 3) and (18 + #opts.Chip * 6) or 42
+		local chip = new("TextButton", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -8 - 88 - 8, 0, 5),
+			Size = UDim2.fromOffset(chipW, 20),
+			BackgroundColor3 = chipState and self.Accent or THEME.Switch,
+			AutoButtonColor = false,
+			Font = FONT_BOLD,
+			TextSize = 9,
+			TextColor3 = chipState and self.AccentInverse or THEME.Text,
+			Text = opts.Chip,
+			ZIndex = 7,
+			Parent = frame,
+		}, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
+		local function chrender()
+			tween(chip, 0.2, { BackgroundColor3 = chipState and self.Accent or THEME.Switch })
+			chip.TextColor3 = chipState and self.AccentInverse or THEME.Text
+		end
+		local chipApi = {}
+		function chipApi:Set(on)
+			on = on == true
+			if on == chipState then return end
+			chipState = on
+			chrender()
+			playSound(SOUND_CLICK, 0.22, on and 1.05 or 0.95)
+			fire(opts.ChipCallback, on)
+		end
+		function chipApi:Get() return chipState end
+		chip.Activated:Connect(function() chipApi:Set(not chipState) end)
+		api.Chip = chipApi
+	end
+
 	local function setFromX(x)
 		local pos, size = track.AbsolutePosition.X, track.AbsoluteSize.X
 		if size <= 0 then return end
