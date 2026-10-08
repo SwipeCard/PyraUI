@@ -130,10 +130,27 @@ local function playSound(id, volume, pitch)
 	end
 end
 
+-- TweenInfos are immutable and reusable, so they are cached by
+-- time/style/direction. Hover and toggle tweens fire constantly; this keeps each
+-- one from allocating a throwaway TweenInfo. Nested tables avoid building a
+-- string key (which would just move the allocation, not remove it).
+local tweenInfoCache = {}
+local function getTweenInfo(time, style, direction)
+	local byStyle = tweenInfoCache[time]
+	if not byStyle then byStyle = {} tweenInfoCache[time] = byStyle end
+	local sv = style.Value
+	local byDir = byStyle[sv]
+	if not byDir then byDir = {} byStyle[sv] = byDir end
+	local dv = direction.Value
+	local info = byDir[dv]
+	if not info then info = TweenInfo.new(time, style, direction) byDir[dv] = info end
+	return info
+end
+
 local function tween(obj, time, props, style, direction)
 	local t = TweenService:Create(
 		obj,
-		TweenInfo.new(time, style or Enum.EasingStyle.Quint, direction or Enum.EasingDirection.Out),
+		getTweenInfo(time, style or Enum.EasingStyle.Quint, direction or Enum.EasingDirection.Out),
 		props
 	)
 	t:Play()
@@ -143,11 +160,17 @@ end
 local function new(className, props, children)
 	local inst = Instance.new(className)
 	local parent
-	for k, v in pairs(props or {}) do
-		if k == "Parent" then parent = v else inst[k] = v end
+	-- `props or {}` / `children or {}` would allocate a throwaway table on every
+	-- call with a nil argument, and this runs hundreds of times building a window.
+	if props then
+		for k, v in pairs(props) do
+			if k == "Parent" then parent = v else inst[k] = v end
+		end
 	end
-	for _, child in ipairs(children or {}) do
-		child.Parent = inst
+	if children then
+		for _, child in ipairs(children) do
+			child.Parent = inst
+		end
 	end
 	if parent then inst.Parent = parent end
 	return inst
@@ -296,20 +319,36 @@ local function createAcrylic(frame)
 	part.Parent = workspace
 
 	local obj = { Part = part, Visible = false }
+	-- Update() runs every frame for every glass panel, so it caches its inputs:
+	-- an unchanged frame + camera costs a few comparisons instead of 3 screen
+	-- rays, 2 square roots and 2 part-property writes. The inset only depends on
+	-- viewport height, so it is recomputed just when the viewport changes.
+	local lastT, lastCF, lastPos, lastSize, lastVpY, cachedInset
 	function obj:Update()
 		if not self.Visible or not frame.Visible or frame.AbsoluteSize.X < 4 or frame.AbsoluteSize.Y < 4 then
-			part.Transparency = 1
+			if lastT ~= 1 then part.Transparency = 1 lastT = 1 end
 			return
 		end
-		part.Transparency = 0.98
-		local inset = mapRange(camera.ViewportSize.Y, 0, 2560, 8, 56)
-		local size = frame.AbsoluteSize - Vector2.new(inset, inset)
-		local pos = frame.AbsolutePosition + Vector2.new(inset / 2, inset / 2)
+		if lastT ~= 0.98 then part.Transparency = 0.98 lastT = 0.98 end
+
+		local vpY = camera.ViewportSize.Y
+		if vpY ~= lastVpY then
+			lastVpY = vpY
+			cachedInset = mapRange(vpY, 0, 2560, 8, 56)
+		end
+
+		local cf = camera.CFrame
+		local aPos, aSize = frame.AbsolutePosition, frame.AbsoluteSize
+		if cf == lastCF and aPos == lastPos and aSize == lastSize then return end
+		lastCF, lastPos, lastSize = cf, aPos, aSize
+
+		local inset = cachedInset
+		local size = aSize - Vector2.new(inset, inset)
+		local pos = aPos + Vector2.new(inset / 2, inset / 2)
 		local d = 0.001
 		local tl = screenToWorld(pos, d)
 		local tr = screenToWorld(pos + Vector2.new(size.X, 0), d)
 		local br = screenToWorld(pos + size, d)
-		local cf = camera.CFrame
 		part.CFrame = CFrame.fromMatrix((tl + br) / 2, cf.XVector, cf.YVector, cf.ZVector)
 		mesh.Scale = Vector3.new((tr - tl).Magnitude, (tr - br).Magnitude, 0)
 	end
@@ -726,12 +765,23 @@ function Library.new(config)
 		if self.Minimized then self:SetMinimized(false) end
 		if searchOpen then searchBox:CaptureFocus() else setSearch(true) end
 	end)
+	-- Rebuilding the result list destroys and recreates an instance set per
+	-- match, so a fast typist would rebuild it once per character. The stroke
+	-- and page swap stay immediate (those are what the eye tracks); only the
+	-- list rebuild is coalesced onto the last keystroke of a burst.
+	local searchToken = 0
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		local q = searchBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
+		searchToken += 1
+		local token = searchToken
 		if q ~= "" then
 			tween(searchStroke, 0.2, { Transparency = 0.3, Color = THEME.Accent })
 			self:_showSearchPage()
-			self:_updateSearchPage(searchBox.Text)
+			local text = searchBox.Text
+			task.delay(0.05, function()
+				if token ~= searchToken or self.Destroyed then return end
+				self:_updateSearchPage(text)
+			end)
 		else
 			tween(searchStroke, 0.2, { Transparency = 0.82, Color = Color3.new(1, 1, 1) })
 			self:_hideSearchPage()
@@ -952,19 +1002,27 @@ function Library.new(config)
 	task.spawn(function()
 		while not self.Destroyed do
 			local now = os.clock()
-			fpsValue.Text = tostring(math.floor(frameCount / math.max(now - frameClock, 1e-3) + 0.5))
-			frameCount, frameClock = 0, now
-			local ok, ping = pcall(function() return player:GetNetworkPing() end)
-			pingValue.Text = ok and (math.floor(ping * 1000 + 0.5) .. " ms") or "-- ms"
-
-			local e
-			if self.SessionStart then
-				e = math.max(0, math.floor(os.time() - self.SessionStart))
+			-- These chips only exist on the open window. While it is closed, skip the
+			-- formatting, the ping call and the property writes; just keep the frame
+			-- window rolling so the first reading after reopening is still accurate.
+			if not self.Open then
+				frameCount, frameClock = 0, now
+				task.wait(0.75)
 			else
-				e = math.floor(now - sessionStart)
+				fpsValue.Text = tostring(math.floor(frameCount / math.max(now - frameClock, 1e-3) + 0.5))
+				frameCount, frameClock = 0, now
+				local ok, ping = pcall(function() return player:GetNetworkPing() end)
+				pingValue.Text = ok and (math.floor(ping * 1000 + 0.5) .. " ms") or "-- ms"
+
+				local e
+				if self.SessionStart then
+					e = math.max(0, math.floor(os.time() - self.SessionStart))
+				else
+					e = math.floor(now - sessionStart)
+				end
+				sessionValue.Text = string.format("%02d:%02d:%02d", e // 3600, (e % 3600) // 60, e % 60)
+				task.wait(0.75)
 			end
-			sessionValue.Text = string.format("%02d:%02d:%02d", e // 3600, (e % 3600) // 60, e % 60)
-			task.wait(0.75)
 		end
 	end)
 
@@ -1085,6 +1143,26 @@ function Library.new(config)
 
 			goalParallax = Vector2.new(-nx, -ny) * PARALLAX_STRENGTH
 		end
+
+		-- Idle fast-path. Once the spring has settled and the window sits on its
+		-- target there is nothing left to animate, so snap the residual sub-pixel
+		-- error away and skip the spring maths, the Lerp and the position writes.
+		-- Any change to TargetPosition or the parallax goal fails these checks on
+		-- the next frame and the loop resumes on its own.
+		local b, t = self.Base, self.TargetPosition
+		if b.X.Scale == t.X.Scale and b.Y.Scale == t.Y.Scale
+			and math.abs(b.X.Offset - t.X.Offset) < 0.5
+			and math.abs(b.Y.Offset - t.Y.Offset) < 0.5
+			and self.ParallaxVelocity.Magnitude < 0.01
+			and (goalParallax - self.Parallax).Magnitude < 0.01 then
+			self.Base = t
+			self.Parallax = goalParallax
+			self.ParallaxVelocity = Vector2.zero
+			local rest = t + UDim2.fromOffset(goalParallax.X, goalParallax.Y)
+			if rest ~= self.Holder.Position then self.Holder.Position = rest end
+			return
+		end
+
 		local accel = (goalParallax - self.Parallax) * PARALLAX_STIFFNESS - self.ParallaxVelocity * PARALLAX_DAMPING
 		self.ParallaxVelocity += accel * step
 		self.Parallax += self.ParallaxVelocity * step
@@ -1506,10 +1584,15 @@ function Library:CreateSidePanel(opts)
 
 		if shown then target = dockTopLeft() end
 		local cur = root.AbsolutePosition
+		local dx, dy = target.X - cur.X, target.Y - cur.Y
+		-- Parked: snap the last sub-pixel and stop writing Position every frame.
+		if dx * dx + dy * dy < 0.25 then
+			local rest = UDim2.fromOffset(target.X, target.Y)
+			if rest ~= root.Position then root.Position = rest end
+			return
+		end
 		local a = math.clamp(dt * 16, 0, 1)
-		local nx = cur.X + (target.X - cur.X) * a
-		local ny = cur.Y + (target.Y - cur.Y) * a
-		root.Position = UDim2.fromOffset(nx, ny)
+		root.Position = UDim2.fromOffset(cur.X + dx * a, cur.Y + dy * a)
 	end)
 	table.insert(self.Connections, driveConn)
 
@@ -2060,9 +2143,13 @@ end
 
 function Library:_index(tab, frame, name, desc)
 	if not self.SearchIndex or not frame or not name then return end
+	local text = name .. " " .. (desc or "")
 	table.insert(self.SearchIndex, {
 		name = name,
-		text = name .. " " .. (desc or ""),
+		text = text,
+		-- Precomputed so filtering does not allocate a lowercased copy of every
+		-- indexed entry on every keystroke.
+		lower = text:lower(),
 		tab = tab.Name,
 		tabRef = tab,
 		frame = frame,
@@ -2137,7 +2224,7 @@ function Library:_updateSearchPage(query)
 	query = (query or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
 	local shown, i = 0, 0
 	for _, entry in ipairs(self.SearchIndex) do
-		if entry.text:lower():find(query, 1, true) then
+		if (entry.lower or entry.text:lower()):find(query, 1, true) then
 			shown += 1
 			i += 1
 			local b = new("TextButton", {
