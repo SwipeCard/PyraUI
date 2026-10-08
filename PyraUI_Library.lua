@@ -10,18 +10,42 @@ local TextService = game:GetService("TextService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
+local function raiseIdentity()
+	local get = get_thread_identity or getthreadidentity or getidentity
+	local set = set_thread_identity or setthreadidentity or setidentity
+	if type(get) ~= "function" or type(set) ~= "function" then return nil, nil end
+	local ok, old = pcall(get)
+	if not ok or type(old) ~= "number" then return nil, nil end
+	if old < 2 then pcall(set, 2) end
+	return set, old
+end
+
+local function restoreIdentity(set, old)
+	if set and old and old < 2 then pcall(set, old) end
+end
+
 local function getGuiParent()
+	if RunService:IsStudio() then
+		return player:WaitForChild("PlayerGui")
+	end
 	if typeof(gethui) == "function" then
 		local ok, hui = pcall(gethui)
 		if ok and hui then return hui end
 	end
+	local set, old = raiseIdentity()
 	local ok = pcall(function() return CoreGui:GetChildren() end)
+	restoreIdentity(set, old)
 	if ok then return CoreGui end
 	return player:WaitForChild("PlayerGui")
 end
 
 local function protect(gui)
-	if syn and syn.protect_gui then pcall(syn.protect_gui, gui) end
+	local fn = protectgui
+		or protect_gui
+		or (syn and syn.protect_gui)
+		or (secure_gui)
+		or (fluxus and fluxus.protect_gui)
+	if type(fn) == "function" then pcall(fn, gui) end
 end
 
 local THEME = {
