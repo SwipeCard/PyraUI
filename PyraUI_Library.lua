@@ -2475,15 +2475,18 @@ function Library:SelectTab(tab, instant)
 	local previous = self.ActiveTab
 	if previous == tab then return end
 	self.ActiveTab = tab
-	local t = 0.35
+	local tIn, tOut = 0.26, 0.12
 
 	if previous then
 		tween(previous.Button, 0.25, { TextColor3 = THEME.SubText })
 		local oldPage = previous.Page
 		local dir = tab.Index > previous.Index and -1 or 1
-		tween(oldPage, t, { GroupTransparency = 1, Position = UDim2.fromOffset(24 * dir, 0) })
-		task.delay(t, function()
-			if self.ActiveTab ~= previous then oldPage.Visible = false end
+		tween(oldPage, tOut, { GroupTransparency = 1, Position = UDim2.fromOffset(14 * dir, 0) }, Enum.EasingStyle.Quad)
+		task.delay(tOut, function()
+			if self.ActiveTab ~= previous then
+				oldPage.Visible = false
+				oldPage.Position = UDim2.fromOffset(0, 0)
+			end
 		end)
 	end
 
@@ -2511,7 +2514,7 @@ function Library:SelectTab(tab, instant)
 	else
 		local dir = (previous and tab.Index < previous.Index) and -1 or 1
 		page.Position = UDim2.fromOffset(24 * dir, 0)
-		tween(page, t, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) })
+		tween(page, tIn, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) })
 	end
 
 	for _, fn in ipairs(self.TabListeners or {}) do task.spawn(fn, tab) end
