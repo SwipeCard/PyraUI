@@ -1860,201 +1860,6 @@ function Library:CreateSidePanel(opts)
 	return panel
 end
 
-function Library:CreateSectionNav(opts)
-	opts = opts or {}
-	local tab = opts.Tab
-	if not tab then return nil end
-	local W = opts.Width or 158
-	local win = self
-	local nav = { _tab = tab, _dirty = true }
-
-	local root = new("CanvasGroup", {
-		Name = "SectionNav",
-		Size = UDim2.fromOffset(W, 120),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = THEME.Glass,
-		BackgroundTransparency = self.IsMobile and SOLID_T or GLASS_PANEL_T,
-		BorderSizePixel = 0,
-		Visible = false,
-		ZIndex = 80,
-		Parent = self.Gui,
-	}, { corner(12), stroke(Color3.new(1, 1, 1), 0.88) })
-	if not self.IsMobile then
-		local a = createAcrylic(root)
-		table.insert(self.Acrylic, a)
-	end
-	new("ImageLabel", {
-		Name = "Noise", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
-		Image = "rbxassetid://9968344227", ImageTransparency = 0.94,
-		ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(128, 128),
-		ZIndex = 2, Parent = root,
-	}, { corner(12) })
-
-	local header = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, ZIndex = 3, Parent = root,
-	})
-	label({
-		Text = string.upper(opts.Title or tab.Name or "Sections"), Font = FONT_BOLD, TextSize = 11,
-		TextColor3 = THEME.SubText,
-		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, -20, 1, 0), TextXAlignment = Enum.TextXAlignment.Center,
-		ZIndex = 4, Parent = header,
-	})
-
-	local body = new("Frame", {
-		Position = UDim2.new(0, 0, 0, 34),
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1,
-		ZIndex = 3,
-		Parent = root,
-	}, {
-		new("UIListLayout", { Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }),
-		new("UIPadding", {
-			PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10),
-			PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 10),
-		}),
-	})
-
-	local accent = tab.Accent or THEME.Accent
-
-	local function scrollTo(row)
-		local scroll = tab.Container
-		if not scroll or not row or not row.Parent then return end
-		local y = (row.AbsolutePosition.Y - scroll.AbsolutePosition.Y) + scroll.CanvasPosition.Y
-		local maxY = math.max(0, scroll.AbsoluteCanvasSize.Y - scroll.AbsoluteSize.Y)
-		local goal = math.clamp(y - 10, 0, maxY)
-		TweenService:Create(
-			scroll,
-			TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-			{ CanvasPosition = Vector2.new(0, goal) }
-		):Play()
-	end
-
-	function nav:Refresh()
-		if not nav._dirty then return end
-		nav._dirty = false
-		for _, c in ipairs(body:GetChildren()) do
-			if c:IsA("TextButton") then c:Destroy() end
-		end
-		local list = tab.Sections or {}
-		for i, sec in ipairs(list) do
-			local b = new("TextButton", {
-				Size = UDim2.new(1, 0, 0, 26),
-				BackgroundColor3 = THEME.Card,
-				BackgroundTransparency = CARD_T,
-				AutoButtonColor = false,
-				Text = "",
-				LayoutOrder = i,
-				ZIndex = 4,
-				Parent = body,
-			}, { corner(7), stroke(Color3.new(1, 1, 1), 0.92) })
-			new("Frame", {
-				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0),
-				Size = UDim2.fromOffset(3, 12), BackgroundColor3 = accent,
-				BorderSizePixel = 0, ZIndex = 5, Parent = b,
-			}, { round() })
-			label({
-				Text = sec.name, Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text,
-				Position = UDim2.fromOffset(18, 0), Size = UDim2.new(1, -26, 1, 0),
-				TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = b,
-			})
-			b.MouseEnter:Connect(function() tween(b, 0.12, { BackgroundTransparency = CARD_HOVER_T }) end)
-			b.MouseLeave:Connect(function() tween(b, 0.12, { BackgroundTransparency = CARD_T }) end)
-			b.Activated:Connect(function()
-				playSound(SOUND_CLICK, 0.2, 1.05)
-				if win.ActiveTab ~= tab then win:SelectTab(tab) end
-				task.defer(scrollTo, sec.row)
-			end)
-		end
-	end
-
-	local shown = false
-	local target = Vector2.new()
-	local lastDock = nil
-
-	local function dockTopLeft()
-		local h = win.Holder
-		local hp, hs = h.AbsolutePosition, h.AbsoluteSize
-		if hs.X < 8 or hs.Y < 8 then
-			return lastDock or Vector2.new(hp.X - W - 16, hp.Y)
-		end
-		lastDock = Vector2.new(hp.X - W - 16, hp.Y + hs.Y / 2 - root.AbsoluteSize.Y / 2)
-		return lastDock
-	end
-	local function hideTopLeft()
-		local d = dockTopLeft()
-		return Vector2.new(-W - 40, d.Y)
-	end
-
-	moveAbs(root, hideTopLeft())
-
-	table.insert(self.Connections, RunService.RenderStepped:Connect(function(dt)
-		if not root.Visible then return end
-		if shown then target = dockTopLeft() end
-		local cur = root.AbsolutePosition
-		local dx, dy = target.X - cur.X, target.Y - cur.Y
-		if dx * dx + dy * dy < 0.25 then
-			if dx ~= 0 or dy ~= 0 then moveAbs(root, target) end
-			return
-		end
-		local a = math.clamp(dt * 16, 0, 1)
-		local p = root.Position
-		root.Position = UDim2.fromOffset(p.X.Offset + dx * a, p.Y.Offset + dy * a)
-	end))
-
-	local fadeTok = 0
-	local function fadeTo(t)
-		fadeTok += 1
-		TweenService:Create(root, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { GroupTransparency = t }):Play()
-	end
-
-	function nav:Show()
-		nav:Refresh()
-		if shown then return end
-		shown = true
-		if not root.Visible then
-			moveAbs(root, hideTopLeft())
-			root.GroupTransparency = 1
-		end
-		root.Visible = true
-		target = dockTopLeft()
-		fadeTo(0)
-	end
-	function nav:Hide()
-		if not shown then return end
-		shown = false
-		target = hideTopLeft()
-		fadeTo(1)
-		local myTok = fadeTok
-		task.delay(0.4, function()
-			if myTok == fadeTok and not shown then root.Visible = false end
-		end)
-	end
-	function nav:_uiHidden()
-		nav._wasVisible = root.Visible
-		if not root.Visible then return end
-		fadeTo(1)
-		local myTok = fadeTok
-		task.delay(0.3, function()
-			if myTok == fadeTok then root.Visible = false end
-		end)
-	end
-	function nav:_uiShown()
-		if not nav._wasVisible then return end
-		root.Visible = true
-		target = dockTopLeft()
-		fadeTo(0)
-	end
-
-	nav.Root = root
-	self._sectionNavs = self._sectionNavs or {}
-	table.insert(self._sectionNavs, nav)
-	self.SidePanels = self.SidePanels or {}
-	table.insert(self.SidePanels, nav)
-	return nav
-end
-
 function Library:AddMonitor(key, label_)
 	self:_ensureMonitorBar()
 	if self.MonitorItems[key] then return self.MonitorItems[key] end
@@ -2107,7 +1912,7 @@ function Library:AddMonitor(key, label_)
 	})
 
 	local win = self
-	local FADE = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local FADE = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local fadeToken = 0
 	local item = { cell = cell, sep = sep, value = valueLabel, caption = capLabel, shown = false }
 	function item:Set(v) valueLabel.Text = tostring(v) end
@@ -2131,8 +1936,8 @@ function Library:AddMonitor(key, label_)
 		else
 			TweenService:Create(capLabel, FADE, { TextTransparency = 1 }):Play()
 			TweenService:Create(valueLabel, FADE, { TextTransparency = 1 }):Play()
-			if sep.Visible then tween(sep, 0.22, { BackgroundTransparency = 1 }) end
-			task.delay(0.22, function()
+			if sep.Visible then tween(sep, 0.12, { BackgroundTransparency = 1 }) end
+			task.delay(0.12, function()
 				if myToken == fadeToken and not self.shown then
 					cell.Visible = false
 					sep.BackgroundTransparency = 0.86
@@ -2512,13 +2317,16 @@ function Library:_pulse(frame)
 	local glow = new("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = THEME.Accent,
-		BackgroundTransparency = 0.75,
+		BackgroundTransparency = 0.6,
 		BorderSizePixel = 0,
 		ZIndex = 25,
 		Parent = frame,
 	}, { corner(8) })
-	tween(glow, 0.9, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quint).Completed:Connect(function()
-		glow:Destroy()
+	task.delay(0.35, function()
+		if not glow.Parent then return end
+		tween(glow, 1.5, { BackgroundTransparency = 1 }, Enum.EasingStyle.Sine).Completed:Connect(function()
+			glow:Destroy()
+		end)
 	end)
 end
 
@@ -3230,6 +3038,9 @@ function Tab:AddToggle(opts)
 	if hasChip then inset = 110 end
 	if hasChip and hasKey then inset = 170 end
 
+	local chipInline = hasChip and opts.ChipInline == true
+	if chipInline then inset = hasKey and 110 or 70 end
+	local inlineRow
 	local iconToggle = opts.IconToggle == true and type(opts.Icon) == "string" and opts.Icon ~= ""
 	if sliderOpts then
 		label({
@@ -3245,7 +3056,52 @@ function Tab:AddToggle(opts)
 			})
 		end
 	else
-		titleBlock(frame, opts.Name or "Toggle", opts.Description, inset, (not iconToggle) and opts.Icon or nil)
+		if chipInline then
+			local tx = ((not iconToggle) and type(opts.Icon) == "string" and opts.Icon ~= "") and 36 or 12
+			if tx == 36 then
+				new("ImageLabel", {
+					Name = "TitleIcon",
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.new(0, 12, 0.5, 0),
+					Size = UDim2.fromOffset(19, 19),
+					BackgroundTransparency = 1,
+					Image = opts.Icon,
+					ImageColor3 = THEME.Text,
+					ScaleType = Enum.ScaleType.Fit,
+					ZIndex = 4,
+					Parent = frame,
+				})
+			end
+			inlineRow = new("Frame", {
+				Position = UDim2.fromOffset(tx, opts.Description and 5 or 9),
+				Size = UDim2.new(0, 0, 0, 20),
+				AutomaticSize = Enum.AutomaticSize.X,
+				BackgroundTransparency = 1,
+				ZIndex = 4,
+				Parent = frame,
+			}, {
+				new("UIListLayout", {
+					FillDirection = Enum.FillDirection.Horizontal,
+					VerticalAlignment = Enum.VerticalAlignment.Center,
+					Padding = UDim.new(0, 8),
+					SortOrder = Enum.SortOrder.LayoutOrder,
+				}),
+			})
+			label({
+				Text = opts.Name or "Toggle", Font = FONT_MEDIUM, TextSize = 13,
+				Size = UDim2.fromOffset(0, 16), AutomaticSize = Enum.AutomaticSize.X,
+				LayoutOrder = 1, ZIndex = 4, Parent = inlineRow,
+			})
+			if opts.Description then
+				label({
+					Text = opts.Description, TextSize = 11, TextColor3 = THEME.SubText,
+					Position = UDim2.fromOffset(tx, 24), Size = UDim2.new(1, -(tx + inset), 0, 14),
+					TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = frame,
+				})
+			end
+		else
+			titleBlock(frame, opts.Name or "Toggle", opts.Description, inset, (not iconToggle) and opts.Icon or nil)
+		end
 	end
 	self.Window:_index(self, frame, opts.Name or "Toggle", opts.Description)
 
@@ -3508,7 +3364,7 @@ function Tab:AddToggle(opts)
 		chip.Activated:Connect(function() chipApi:Set(not chipState) end)
 		api.Chip = chipApi
 
-		if hasKey and keyChipRef then
+		if hasKey and keyChipRef and not inlineRow then
 			local function reposition()
 				chip.Position = UDim2.new(1, -60 - keyChipRef.AbsoluteSize.X - 6, 0.5, 0)
 			end
@@ -4591,45 +4447,33 @@ function Tab:AddRandomSlider(opts)
 		morphing = true
 		morphTok += 1
 		local tok = morphTok
-		local MT = TweenInfo.new(0.34, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 
-		if randomize then
-			local from = pctOf(val)
-			knobA.Position = UDim2.fromScale(from, 0.5)
-			knobB.Position = UDim2.fromScale(from, 0.5)
-			fill.Position = UDim2.fromScale(from, 0)
-			fill.Size = UDim2.fromScale(0, 1)
-			setKnobAlpha(knobB, 1)
-			knobB.Visible = true
-			TweenService:Create(knobA, MT, { Position = UDim2.fromScale(pctOf(lo), 0.5) }):Play()
-			TweenService:Create(knobB, MT, { Position = UDim2.fromScale(pctOf(hi), 0.5) }):Play()
-			TweenService:Create(fill, MT, {
-				Position = UDim2.fromScale(pctOf(lo), 0),
-				Size = UDim2.fromScale(pctOf(hi) - pctOf(lo), 1),
-			}):Play()
-			fadeKnob(knobB, 0)
-			if not editing then valueLabel.Text = format(lo) .. suffix .. "  -  " .. format(hi) .. suffix end
-		else
-			local to = pctOf(val)
-			TweenService:Create(knobA, MT, { Position = UDim2.fromScale(to, 0.5) }):Play()
-			TweenService:Create(knobB, MT, { Position = UDim2.fromScale(to, 0.5) }):Play()
-			TweenService:Create(fill, MT, {
-				Position = UDim2.fromScale(0, 0),
-				Size = UDim2.fromScale(to, 1),
-			}):Play()
-			fadeKnob(knobB, 1)
-			if not editing then valueLabel.Text = format(val) .. suffix end
-		end
+		fadeKnob(knobA, 1)
+		fadeKnob(knobB, 1)
+		TweenService:Create(fill, FADE, { BackgroundTransparency = 1 }):Play()
 
-		task.delay(0.36, function()
+		task.delay(0.22, function()
 			if tok ~= morphTok then return end
 			if randomize then
-				setKnobAlpha(knobB, 0)
+				knobB.Visible = true
+				knobA.Position = UDim2.fromScale(pctOf(lo), 0.5)
+				knobB.Position = UDim2.fromScale(pctOf(hi), 0.5)
+				fill.Position = UDim2.fromScale(pctOf(lo), 0)
+				fill.Size = UDim2.fromScale(pctOf(hi) - pctOf(lo), 1)
+				if not editing then valueLabel.Text = format(lo) .. suffix .. "  -  " .. format(hi) .. suffix end
 			else
 				knobB.Visible = false
-				setKnobAlpha(knobB, 0)
+				knobA.Position = UDim2.fromScale(pctOf(val), 0.5)
+				fill.Position = UDim2.fromScale(0, 0)
+				fill.Size = UDim2.fromScale(pctOf(val), 1)
+				if not editing then valueLabel.Text = format(val) .. suffix end
 			end
-			morphing = false
+			TweenService:Create(fill, FADE, { BackgroundTransparency = 0 }):Play()
+			fadeKnob(knobA, 0)
+			if randomize then fadeKnob(knobB, 0) end
+			task.delay(0.24, function()
+				if tok == morphTok then morphing = false end
+			end)
 		end)
 		playSound(SOUND_CLICK, 0.25, on and 1.1 or 0.9)
 		fire(opts.Callback, api:Config())
