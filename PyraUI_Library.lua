@@ -3079,7 +3079,7 @@ function Tab:AddToggle(opts)
 				Size = UDim2.new(0, 0, 0, 20),
 				AutomaticSize = Enum.AutomaticSize.X,
 				BackgroundTransparency = 1,
-				ZIndex = 4,
+				ZIndex = 8,
 				Parent = frame,
 			}, {
 				new("UIListLayout", {
@@ -3936,6 +3936,7 @@ function Tab:AddDropdown(opts)
 			local on = item.option == selected
 			tween(item.label, t, { TextColor3 = on and THEME.Text or THEME.SubText })
 			tween(item.dot, t, { BackgroundTransparency = on and 0 or 1 })
+			if item.num then tween(item.num, t, { TextTransparency = on and 1 or 0 }) end
 		end
 	end
 
@@ -3953,22 +3954,23 @@ function Tab:AddDropdown(opts)
 		local numbered = tonumber(opts.NumberStart)
 		local l = label({
 			Text = tostring(option), TextSize = 12, TextColor3 = THEME.SubText,
-			Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, numbered and -46 or -28, 1, 0),
+			Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -28, 1, 0),
 			ZIndex = 5, Parent = b,
 		})
+		local num
 		if numbered then
-			label({
+			num = label({
 				Text = tostring(numbered + i - 1), Font = FONT_BOLD, TextSize = 10,
 				TextColor3 = THEME.Muted,
-				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
+				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -9, 0.5, 0),
 				Size = UDim2.fromOffset(14, 14), TextXAlignment = Enum.TextXAlignment.Right,
 				ZIndex = 5, Parent = b,
 			})
 		end
 		local dot = new("Frame", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, numbered and -28 or -10, 0.5, 0),
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
 			Size = UDim2.fromOffset(5, 5), BackgroundColor3 = self.Accent,
-			BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 5, Parent = b,
+			BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 6, Parent = b,
 		}, { round() })
 		b.MouseEnter:Connect(function() tween(b, 0.15, { BackgroundTransparency = 0.94 }) end)
 		b.MouseLeave:Connect(function() tween(b, 0.15, { BackgroundTransparency = 1 }) end)
@@ -3976,7 +3978,7 @@ function Tab:AddDropdown(opts)
 			api:Set(option)
 			api:SetOpen(false)
 		end)
-		table.insert(items, { option = option, label = l, dot = dot })
+		table.insert(items, { option = option, label = l, dot = dot, num = num })
 	end
 
 	local fullHeight = HEADER + #options * (OPTION_H + OPTION_GAP) + 8
@@ -4368,6 +4370,7 @@ function Tab:AddRandomSlider(opts)
 	})
 
 	local ACC, ACCI = self.Accent, self.AccentInverse
+	local api_extra_chip
 	local rngChip = new("TextButton", {
 		Size = UDim2.fromOffset(62, 20),
 		LayoutOrder = 2,
@@ -4380,6 +4383,37 @@ function Tab:AddRandomSlider(opts)
 		ZIndex = 7,
 		Parent = headRow,
 	}, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
+
+	local extraChip
+	if type(opts.Chip) == "string" then
+		local st = opts.ChipDefault == true
+		local w = (#opts.Chip > 3) and (18 + #opts.Chip * 6) or 42
+		extraChip = new("TextButton", {
+			Size = UDim2.fromOffset(w, 20),
+			LayoutOrder = 3,
+			BackgroundColor3 = st and ACC or THEME.Switch,
+			AutoButtonColor = false,
+			Font = FONT_BOLD,
+			TextSize = 9,
+			TextColor3 = st and ACCI or THEME.Text,
+			Text = opts.Chip,
+			ZIndex = 7,
+			Parent = headRow,
+		}, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
+		local eApi = {}
+		function eApi:Set(on)
+			on = on == true
+			if on == st then return end
+			st = on
+			tween(extraChip, 0.2, { BackgroundColor3 = on and ACC or THEME.Switch })
+			extraChip.TextColor3 = on and ACCI or THEME.Text
+			playSound(SOUND_CLICK, 0.22, on and 1.05 or 0.95)
+			fire(opts.ChipCallback, on)
+		end
+        function eApi:Get() return st end
+		extraChip.Activated:Connect(function() eApi:Set(not st) end)
+		api_extra_chip = eApi
+	end
 	self.Window:_index(self, frame, opts.Name or "Value", opts.Description)
 
 	local track = new("Frame", {
@@ -4442,7 +4476,7 @@ function Tab:AddRandomSlider(opts)
 		end
 	end
 
-	local FADE = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local FADE = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 	local function setKnobAlpha(k, t)
 		k.BackgroundTransparency = t
@@ -4471,7 +4505,7 @@ function Tab:AddRandomSlider(opts)
 		fadeKnob(knobB, 1)
 		TweenService:Create(fill, FADE, { BackgroundTransparency = 1 }):Play()
 
-		task.delay(0.22, function()
+		task.delay(0.1, function()
 			if tok ~= morphTok then return end
 			if randomize then
 				knobB.Visible = true
@@ -4490,7 +4524,7 @@ function Tab:AddRandomSlider(opts)
 			TweenService:Create(fill, FADE, { BackgroundTransparency = 0 }):Play()
 			fadeKnob(knobA, 0)
 			if randomize then fadeKnob(knobB, 0) end
-			task.delay(0.24, function()
+			task.delay(0.12, function()
 				if tok == morphTok then morphing = false end
 			end)
 		end)
@@ -4501,6 +4535,7 @@ function Tab:AddRandomSlider(opts)
 		if randomize then return { randomize = true, min = lo, max = hi } end
 		return { randomize = false, value = val }
 	end
+	api.Chip = api_extra_chip
 	function api:Get()
 		if randomize then
 			if decimals == 0 and increment == 1 then return math.random(math.floor(lo), math.floor(hi)) end
