@@ -32,6 +32,7 @@ local THEME = {
 	Body          = Color3.fromRGB(220, 220, 226),
 	SubText       = Color3.fromRGB(150, 150, 160),
 	Muted         = Color3.fromRGB(90, 90, 100),
+	Premium       = Color3.fromRGB(255, 205, 70),
 	Accent        = Color3.fromRGB(255, 255, 255),
 	AccentInverse = Color3.fromRGB(10, 10, 12),
 }
@@ -885,6 +886,8 @@ function Library.new(config)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 0,
+		ScrollBarImageTransparency = 1,
+		VerticalScrollBarInset = Enum.ScrollBarInset.None,
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -952,7 +955,7 @@ function Library.new(config)
 			Size = UDim2.fromOffset(16, 16),
 			BackgroundTransparency = 1,
 			Image = ICONS.Diamond,
-			ImageColor3 = THEME.Accent,
+			ImageColor3 = THEME.Premium,
 			ScaleType = Enum.ScaleType.Fit,
 			ZIndex = 3,
 			Parent = self.Footer,
@@ -968,7 +971,7 @@ function Library.new(config)
 			Position = UDim2.new(0, 54, 0.5, 9),
 			Size = UDim2.fromOffset(6, 6),
 			Rotation = 45,
-			BackgroundColor3 = THEME.Accent,
+			BackgroundColor3 = THEME.Premium,
 			BorderSizePixel = 0,
 			ZIndex = 3,
 			Parent = self.Footer,
@@ -1834,6 +1837,7 @@ function Library:CreateSidePanel(opts)
 	end))
 
 	function panel:_uiHidden()
+		if pinned then panel._wasVisible = false return end
 		panel._wasVisible = root.Visible
 		if not root.Visible then return end
 		fadeTo(1)
@@ -2505,6 +2509,8 @@ function Library:AddTab(name, tabOpts)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 0,
+		ScrollBarImageTransparency = 1,
+		VerticalScrollBarInset = Enum.ScrollBarInset.None,
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -4254,7 +4260,7 @@ function Tab:AddRandomSlider(opts)
 	local frame = elementFrame(self, 50)
 	label({
 		Text = opts.Name or "Value", Font = FONT_MEDIUM, TextSize = 13,
-		Position = UDim2.fromOffset(12, 7), Size = UDim2.new(1, -140, 0, 16),
+		Position = UDim2.fromOffset(12, 7), Size = UDim2.new(1, -220, 0, 16),
 		TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = frame,
 	})
 	local valueLabel = valueBox({
@@ -4262,13 +4268,20 @@ function Tab:AddRandomSlider(opts)
 		Parent = frame,
 	})
 
+	local ACC, ACCI = self.Accent, self.AccentInverse
 	local rngChip = new("TextButton", {
-		Size = UDim2.fromOffset(1, 1),
-		BackgroundTransparency = 1,
-		Text = "",
-		Visible = false,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -146, 0, 5),
+		Size = UDim2.fromOffset(62, 20),
+		BackgroundColor3 = randomize and ACC or THEME.Switch,
+		AutoButtonColor = false,
+		Font = FONT_BOLD,
+		TextSize = 9,
+		TextColor3 = randomize and ACCI or THEME.Text,
+		Text = "RANDOM",
+		ZIndex = 7,
 		Parent = frame,
-	})
+	}, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
 	self.Window:_index(self, frame, opts.Name or "Value", opts.Description)
 
 	local track = new("Frame", {
@@ -4345,8 +4358,8 @@ function Tab:AddRandomSlider(opts)
 		on = on == true
 		if on == randomize then return end
 		randomize = on
-		tween(rngChip, 0.25, { BackgroundColor3 = on and self.Accent or THEME.Switch })
-		tween(rngChip, 0.25, { TextColor3 = on and self.AccentInverse or THEME.Text })
+		tween(rngChip, 0.25, { BackgroundColor3 = on and ACC or THEME.Switch })
+		rngChip.TextColor3 = on and ACCI or THEME.Text
 
 		morphing = true
 		morphTok += 1
