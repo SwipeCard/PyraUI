@@ -402,7 +402,7 @@ local function createAcrylic(frame)
 	part.Parent = workspace
 
 	local obj = { Part = part, Visible = false }
-	local lastT, lastCF, lastPos, lastSize, lastVpY, cachedInset
+	local lastT, lastCF, lastPos, lastSize, lastVpY, cachedInset, lastFov, lastStamp
 	function obj:Update()
 		if not self.Visible or not frame.Visible or frame.AbsoluteSize.X < 4 or frame.AbsoluteSize.Y < 4 then
 			if lastT ~= 1 then part.Transparency = 1 lastT = 1 end
@@ -417,9 +417,12 @@ local function createAcrylic(frame)
 		end
 
 		local cf = camera.CFrame
+		local fov = camera.FieldOfView
 		local aPos, aSize = frame.AbsolutePosition, frame.AbsoluteSize
-		if cf == lastCF and aPos == lastPos and aSize == lastSize then return end
-		lastCF, lastPos, lastSize = cf, aPos, aSize
+		local now = os.clock()
+		local stale = (lastStamp == nil) or ((now - lastStamp) > 0.2)
+		if not stale and cf == lastCF and fov == lastFov and aPos == lastPos and aSize == lastSize then return end
+		lastCF, lastFov, lastPos, lastSize, lastStamp = cf, fov, aPos, aSize, now
 
 		local inset = cachedInset
 		local size = aSize - Vector2.new(inset, inset)
