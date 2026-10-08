@@ -4,6 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local SoundService = game:GetService("SoundService")
+local GuiService = game:GetService("GuiService")
 local CoreGui = game:GetService("CoreGui")
 local TextService = game:GetService("TextService")
 
@@ -1282,6 +1283,9 @@ function Library:Show()
 		if self.Open then self.OpenButton.Visible = false end
 	end)
 	self:_applyWorld(true)
+	if self.SidePanels then
+		for _, p in ipairs(self.SidePanels) do pcall(p._uiShown, p) end
+	end
 end
 
 function Library:Hide()
@@ -1294,6 +1298,9 @@ function Library:Hide()
 	self.OpenButton.Visible = true
 	tween(self.OpenButtonScale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
 	self:_applyWorld(false)
+	if self.SidePanels then
+		for _, p in ipairs(self.SidePanels) do pcall(p._uiHidden, p) end
+	end
 	self:Notify("Interface hidden", "Press " .. self.ToggleKey.Name .. " to open it again.", 5)
 end
 
@@ -1596,6 +1603,17 @@ function Library:CreateSidePanel(opts)
 	local dragging = false
 	local target = Vector2.new()
 
+	local function originOffset()
+		if win.Gui.IgnoreGuiInset then return Vector2.zero end
+		local ok, ins = pcall(function() return GuiService:GetGuiInset() end)
+		if ok and ins then return Vector2.new(ins.X, ins.Y) end
+		return Vector2.zero
+	end
+	local function setAbs(v)
+		local o = originOffset()
+		root.Position = UDim2.fromOffset(v.X - o.X, v.Y - o.Y)
+	end
+
 	local function dockTopLeft()
 		local h = win.Holder
 		local hp, hs = h.AbsolutePosition, h.AbsoluteSize
@@ -1609,7 +1627,7 @@ function Library:CreateSidePanel(opts)
 		return Vector2.new(vp.X + 30, d.Y)
 	end
 
-	root.Position = UDim2.fromOffset(hideTopLeft().X, hideTopLeft().Y)
+	setAbs(hideTopLeft())
 
 	local driveConn = RunService.RenderStepped:Connect(function(dt)
 		if not root.Visible then return end
@@ -1619,12 +1637,11 @@ function Library:CreateSidePanel(opts)
 		local cur = root.AbsolutePosition
 		local dx, dy = target.X - cur.X, target.Y - cur.Y
 		if dx * dx + dy * dy < 0.25 then
-			local rest = UDim2.fromOffset(target.X, target.Y)
-			if rest ~= root.Position then root.Position = rest end
+			setAbs(target)
 			return
 		end
 		local a = math.clamp(dt * 16, 0, 1)
-		root.Position = UDim2.fromOffset(cur.X + dx * a, cur.Y + dy * a)
+		setAbs(Vector2.new(cur.X + dx * a, cur.Y + dy * a))
 	end)
 	table.insert(self.Connections, driveConn)
 
@@ -1639,9 +1656,7 @@ function Library:CreateSidePanel(opts)
 		if shown then return end
 		shown = true
 		if not root.Visible then
-
-			local h = hideTopLeft()
-			root.Position = UDim2.fromOffset(h.X, h.Y)
+			setAbs(hideTopLeft())
 			root.GroupTransparency = 1
 		end
 		root.Visible = true
@@ -1720,30 +1735,43 @@ function Library:CreateSidePanel(opts)
 
 	local function followCursor(mouse)
 		if not grabOffset then return end
-		local tl = mouse - grabOffset
-		root.Position = UDim2.fromOffset(tl.X, tl.Y)
+		setAbs(mouse - grabOffset)
+	end
+
+	local rootStroke = root:FindFirstChildOfClass("UIStroke")
+	local snapLit = false
+	local function snapColor()
+		local t = panel._homeTab or win.ActiveTab
+		return (t and t.Accent) or THEME.Accent
+	end
+	local function setSnapHint(on)
+		if on == snapLit then return end
+		snapLit = on
+		if not rootStroke then return end
+		tween(rootStroke, 0.15, {
+			Color = on and snapColor() or Color3.new(1, 1, 1),
+			Transparency = on and 0.25 or 0.88,
+		})
 	end
 
 	dragHandle.InputBegan:Connect(function(input)
 		if not isPress(input) then return end
+		if dragging then return end
 		dragging = true
 		dragStart = Vector2.new(input.Position.X, input.Position.Y)
 		grabOffset = dragStart - root.AbsolutePosition
 		local conn
 		conn = input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-				conn:Disconnect()
-				if not detached then return end
-
-				local tl = root.AbsolutePosition
-				local near = (tl - dockTopLeft()).Magnitude < DOCK_SNAP_RADIUS
-				if near then
-					reattach()
-				else
-
-					target = tl
-				end
+			if input.UserInputState ~= Enum.UserInputState.End then return end
+			conn:Disconnect()
+			dragging = false
+			setSnapHint(false)
+			if not detached then return end
+			local tl = root.AbsolutePosition
+			if (tl - dockTopLeft()).Magnitude < DOCK_SNAP_RADIUS then
+				reattach()
+			else
+				target = tl
 			end
 		end)
 	end)
@@ -1751,19 +1779,37 @@ function Library:CreateSidePanel(opts)
 		if not dragging or not isMove(input) then return end
 		local mouse = Vector2.new(input.Position.X, input.Position.Y)
 		if not detached then
-
 			if (mouse - dragStart).Magnitude > DETACH_THRESHOLD then
 				grabOffset = dragStart - root.AbsolutePosition
 				detach()
 				followCursor(mouse)
 			end
-		else
-			followCursor(mouse)
+			return
 		end
+		followCursor(mouse)
+		setSnapHint((root.AbsolutePosition - dockTopLeft()).Magnitude < DOCK_SNAP_RADIUS)
 	end))
+
+	function panel:_uiHidden()
+		panel._wasVisible = root.Visible
+		if not root.Visible then return end
+		fadeTo(1)
+		local myTok = fadeTok
+		task.delay(0.3, function()
+			if myTok == fadeTok then root.Visible = false end
+		end)
+	end
+	function panel:_uiShown()
+		if not panel._wasVisible then return end
+		root.Visible = true
+		if not detached then target = dockTopLeft() end
+		fadeTo(0)
+	end
 
 	panel.Root = root
 	applyPin()
+	self.SidePanels = self.SidePanels or {}
+	table.insert(self.SidePanels, panel)
 	return panel
 end
 
