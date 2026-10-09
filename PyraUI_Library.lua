@@ -3152,6 +3152,8 @@ function Tab:AddToggle(opts)
 
 	local bigIcon
 	local switch, knob
+	local checkbox, checkMark
+	local isCheckbox = opts.Checkbox == true and not iconToggle and not sliderOpts
 	if iconToggle then
 
 		bigIcon = new("ImageLabel", {
@@ -3165,6 +3167,31 @@ function Tab:AddToggle(opts)
 			ZIndex = 4,
 			Parent = frame,
 		})
+	elseif isCheckbox then
+		-- Square selection box with a checkmark, instead of the pill switch.
+		checkbox = new("Frame", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -12, 0.5, 0),
+			Size = UDim2.fromOffset(22, 22),
+			BackgroundColor3 = THEME.Switch,
+			BorderSizePixel = 0,
+			ZIndex = 4,
+			Parent = frame,
+		}, { corner(6), stroke(Color3.new(1, 1, 1), 0.86) })
+		local useCheckIcon = type(ICONS.Check) == "string" and ICONS.Check ~= ""
+		if useCheckIcon then
+			checkMark = new("ImageLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+				Image = ICONS.Check, ImageColor3 = THEME.Text, ImageTransparency = 1, ZIndex = 5, Parent = checkbox,
+			})
+		else
+			checkMark = label({
+				Text = "✓", Font = FONT_BOLD, TextSize = 14, TextColor3 = THEME.Text,
+				Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center,
+				TextTransparency = 1, ZIndex = 5, Parent = checkbox,
+			})
+		end
 	else
 		local switchY = sliderOpts and UDim2.new(1, -12, 0, 16) or UDim2.new(1, -12, 0.5, 0)
 		switch = new("Frame", {
@@ -3203,6 +3230,16 @@ function Tab:AddToggle(opts)
 					bigIcon.Image = state and iconSel or iconBase
 				end
 				TweenService:Create(bigIcon, info, { ImageColor3 = state and self.Accent or THEME.SubText }):Play()
+			end
+		elseif isCheckbox then
+			TweenService:Create(checkbox, info, { BackgroundColor3 = state and self.Accent or THEME.Switch }):Play()
+			if checkMark then
+				if checkMark:IsA("ImageLabel") then
+					TweenService:Create(checkMark, info, { ImageColor3 = self.AccentInverse, ImageTransparency = state and 0 or 1 }):Play()
+				else
+					checkMark.TextColor3 = self.AccentInverse
+					TweenService:Create(checkMark, info, { TextTransparency = state and 0 or 1 }):Play()
+				end
 			end
 		else
 			TweenService:Create(switch, info, { BackgroundColor3 = state and self.Accent or THEME.Switch }):Play()
@@ -5459,6 +5496,46 @@ function Library:CreatePanel(opts)
 	function panel:AddButton(o)
 		local row = self:AddRow()
 		return row:AddButton(o)
+	end
+
+	-- Grid of equal-width buttons, `cols` per row (e.g. 2 for a 2x2). Rows grow
+	-- automatically as buttons are added.
+	function panel:AddGrid(cols)
+		cols = math.max(1, cols or 2)
+		local wrap = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			LayoutOrder = nextOrder(),
+			ZIndex = 4,
+			Parent = body,
+		}, {
+			new("UIGridLayout", {
+				CellSize = UDim2.new(1 / cols, -5, 0, 30),
+				CellPadding = UDim2.fromOffset(6, 6),
+				FillDirectionMaxCells = cols,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			}),
+		})
+		local gridApi = {}
+		local gord = 0
+		function gridApi:AddButton(o)
+			o = o or {}
+			gord += 1
+			local b = new("TextButton", {
+				BackgroundColor3 = o.Color or THEME.Switch,
+				BackgroundTransparency = 0.12,
+				Text = o.Name or "Button",
+				Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.Text,
+				AutoButtonColor = true, LayoutOrder = gord, ZIndex = 5, Parent = wrap,
+			}, { corner(7) })
+			b.Activated:Connect(function() playSound(SOUND_CLICK, 0.3) fire(o.Callback) end)
+			local ba = {}
+			function ba:SetText(t) b.Text = tostring(t) end
+			return ba
+		end
+		return gridApi
 	end
 
 	self:OnDestroy(function() panel:Destroy() end)
