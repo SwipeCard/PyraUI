@@ -72,7 +72,7 @@ local THEME = {
 
 local GLASS_DOCK_T  = 0.28
 local GLASS_PANEL_T = 0.34
-local SOLID_T       = 0.06
+local SOLID_T       = 0
 local CARD_T        = 0.955
 local CARD_HOVER_T  = 0.93
 
@@ -579,9 +579,14 @@ function Library.new(config)
 	self.ScaleMultiplier = 1
 	self.Connections = {}
 
+	-- Config flag registry: controls created with a Flag option register their
+	-- api here so SaveConfig/LoadConfig can serialize them. [flagName] = {api, kind}
+	self.Flags = {}
+	self._flagOrder = {}
+
 	self.SessionStart = (type(config.SessionStart) == "number" and config.SessionStart > 0) and config.SessionStart or nil
 	self.IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
-	self.AcrylicEnabled = not self.IsMobile
+	self.AcrylicEnabled = false
 	self.WorldDimEnabled = true
 	self.WorldDimPersistent = false
 	self.ParallaxEnabled = false
@@ -660,6 +665,7 @@ function Library.new(config)
 		Position = UDim2.new(0, 0, 0, DOCK_H + GAP),
 		Size = UDim2.new(1, 0, 0, PANEL_H),
 		ClipsDescendants = true,
+		Active = true,
 		ZIndex = 1,
 		Parent = self.Holder,
 	})
@@ -944,6 +950,7 @@ function Library.new(config)
 		Name = "Footer",
 		Position = UDim2.new(0, 0, 0, self.FooterY),
 		Size = UDim2.new(1, 0, 0, FOOTER_H),
+		Active = true,
 		ZIndex = 1,
 		Parent = self.Holder,
 	})
@@ -2345,6 +2352,86 @@ function Library:_index(tab, frame, name, desc)
 	})
 end
 
+-- Register a control's api under a flag name so it can be saved/loaded.
+-- kind: "toggle" | "slider" | "dropdown" | "input" | "keybind" | "color" | "range"
+function Library:_registerFlag(flag, api, kind)
+	if type(flag) ~= "string" or flag == "" or not api then return end
+	if not self.Flags[flag] then table.insert(self._flagOrder, flag) end
+	self.Flags[flag] = { api = api, kind = kind }
+end
+
+-- Serialize one flag's current value into a plain JSON-safe value.
+local function _flagSerialize(entry)
+	local api, kind = entry.api, entry.kind
+	local ok, v = pcall(api.Get, api)
+	if not ok then return nil end
+	if kind == "color" then
+		if typeof(v) == "Color3" then return { r = v.R, g = v.G, b = v.B } end
+		return nil
+	elseif kind == "keybind" then
+		if typeof(v) == "EnumItem" then return v.Name end
+		return nil
+	elseif kind == "range" then
+		-- Get() returns two numbers
+		local ok2, a, b = pcall(api.Get, api)
+		if ok2 then return { a, b } end
+		return nil
+	elseif kind == "randomslider" then
+		if type(api.Config) == "function" then
+			local ok3, cfg = pcall(api.Config, api)
+			if ok3 then return cfg end
+		end
+		return nil
+	end
+	return v -- toggle(bool)/slider(num)/dropdown(str)/input(str)
+end
+
+local function _flagApply(entry, value)
+	local api, kind = entry.api, entry.kind
+	if value == nil then return end
+	if kind == "color" then
+		if type(value) == "table" and value.r then
+			pcall(api.Set, api, Color3.new(value.r, value.g, value.b))
+		end
+	elseif kind == "keybind" then
+		if type(value) == "string" and Enum.KeyCode[value] then
+			pcall(api.Set, api, Enum.KeyCode[value])
+		end
+	elseif kind == "range" then
+		if type(value) == "table" then pcall(api.Set, api, value[1], value[2]) end
+	elseif kind == "randomslider" then
+		if type(value) == "table" then
+			if type(api.SetRandomize) == "function" then pcall(api.SetRandomize, api, value.randomize == true) end
+			if value.randomize then
+				pcall(api.Set, api, value.min, value.max)
+			else
+				pcall(api.Set, api, value.value)
+			end
+		end
+	else
+		pcall(api.Set, api, value)
+	end
+end
+
+-- Collect all registered flags into a table.
+function Library:GetConfig()
+	local out = {}
+	for flag, entry in pairs(self.Flags) do
+		local v = _flagSerialize(entry)
+		if v ~= nil then out[flag] = v end
+	end
+	return out
+end
+
+-- Apply a table of flag values to the registered controls.
+function Library:SetConfig(data)
+	if type(data) ~= "table" then return end
+	for _, flag in ipairs(self._flagOrder) do
+		local entry = self.Flags[flag]
+		if entry and data[flag] ~= nil then _flagApply(entry, data[flag]) end
+	end
+end
+
 function Library:_resolveTabName(entry)
 	if entry.tab then return entry.tab end
 	for _, t in ipairs(self.Tabs) do
@@ -3599,6 +3686,7 @@ function Tab:AddToggle(opts)
 	end
 
 	render(true)
+	self.Window:_registerFlag(opts.Flag, api, "toggle")
 	return api
 end
 
@@ -3886,6 +3974,7 @@ function Tab:AddSlider(opts)
 
 	value = snap(opts.Default or min)
 	render(true)
+	self.Window:_registerFlag(opts.Flag, api, "slider")
 	return api
 end
 
@@ -3968,11 +4057,55 @@ function Tab:AddDropdown(opts)
 		Position = UDim2.fromOffset(12, 0), Size = UDim2.new(0.5, -12, 0, HEADER), ZIndex = 4, Parent = frame,
 	})
 	self.Window:_index(self, frame, opts.Name or "Dropdown", opts.Description)
+
+	-- Optional inline toggle chip on the header (e.g. an "Auto Rejoin" switch
+	-- living inside a device-select dropdown). Tapping it toggles independently
+	-- of the dropdown opening.
+	local hasChip = type(opts.Chip) == "string"
+	local chipState = opts.ChipDefault == true
+	local chipBtn, chipDot, chipLabel
+	local currentRightInset = 34
+	if hasChip then
+		currentRightInset = 118
+		chipBtn = new("TextButton", {
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -34, 0.5, 0),
+			Size = UDim2.fromOffset(78, 20), BackgroundColor3 = THEME.Switch,
+			BackgroundTransparency = 0.15, AutoButtonColor = true, Text = "", ZIndex = 7, Parent = frame,
+		}, { corner(10), stroke(Color3.new(1, 1, 1), 0.88) })
+		chipDot = new("Frame", {
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 4, 0.5, 0),
+			Size = UDim2.fromOffset(12, 12), BackgroundColor3 = THEME.SubText, BorderSizePixel = 0,
+			ZIndex = 8, Parent = chipBtn,
+		}, { round() })
+		chipLabel = label({
+			Text = opts.Chip, Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
+			Size = UDim2.fromOffset(56, 14), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 8, Parent = chipBtn,
+		})
+	end
+
 	local current = label({
 		TextSize = 12, TextColor3 = THEME.SubText,
-		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -34, 0, 0), Size = UDim2.new(0.5, -34, 0, HEADER),
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -currentRightInset, 0, 0), Size = UDim2.new(0.5, -currentRightInset, 0, HEADER),
 		TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = frame,
 	})
+
+	if hasChip then
+		local function renderChip(instant)
+			local t = instant and 0 or 0.2
+			tween(chipBtn, t, { BackgroundColor3 = chipState and self.Accent or THEME.Switch })
+			tween(chipDot, t, { BackgroundColor3 = chipState and self.AccentInverse or THEME.SubText,
+				Position = chipState and UDim2.new(1, -16, 0.5, 0) or UDim2.new(0, 4, 0.5, 0) })
+			tween(chipLabel, t, { TextColor3 = chipState and self.AccentInverse or THEME.SubText })
+		end
+		renderChip(true)
+		chipBtn.Activated:Connect(function()
+			chipState = not chipState
+			renderChip(false)
+			playSound(SOUND_CLICK, 0.3)
+			fire(opts.ChipCallback, chipState)
+		end)
+	end
 	local arrowUseIcon = type(ICONS.Arrow) == "string" and ICONS.Arrow ~= ""
 	local arrow
 	if arrowUseIcon then
@@ -4089,6 +4222,7 @@ function Tab:AddDropdown(opts)
 
 	header.Activated:Connect(function() api:SetOpen(not isOpen) end)
 	refresh(true)
+	self.Window:_registerFlag(opts.Flag, api, "dropdown")
 	return api
 end
 
@@ -4228,6 +4362,7 @@ function Tab:AddColorPicker(opts)
 	header.Activated:Connect(function() api:SetOpen(not isOpen) end)
 	swatch.BackgroundColor3 = Color3.fromHSV(h, s, v)
 	render(false)
+	self.Window:_registerFlag(opts.Flag, api, "color")
 	return api
 end
 
@@ -4388,6 +4523,7 @@ function Tab:AddRangeSlider(opts)
 	end)
 
 	render(true)
+	self.Window:_registerFlag(opts.Flag, api, "range")
 	return api
 end
 
@@ -4691,6 +4827,7 @@ function Tab:AddRandomSlider(opts)
 	rngChip.TextColor3 = randomize and self.AccentInverse or THEME.Text
 	rngChip.BackgroundColor3 = randomize and self.Accent or THEME.Switch
 	render(true)
+	self.Window:_registerFlag(opts.Flag, api, "randomslider")
 	return api
 end
 
@@ -4753,6 +4890,7 @@ function Tab:AddKeybind(opts)
 	end)
 
 	render()
+	self.Window:_registerFlag(opts.Flag, api, "keybind")
 	return api
 end
 
@@ -4935,6 +5073,7 @@ function Tab:AddInput(opts)
 		if box:IsFocused() then box:ReleaseFocus() end
 		if isSearch then setSearch(false) end
 	end
+	self.Window:_registerFlag(opts.Flag, api, "input")
 	return api
 end
 
