@@ -5119,6 +5119,296 @@ function Tab:AddPlayerSearch(opts)
 	return api
 end
 
+-- =============================================================================
+-- AddTextArea: a tall, multi-line, scrolling text box element. Good for long
+-- pasted content (configs, flag lists, notes). Returns an api with GetText /
+-- SetText / OnChanged.
+-- opts: Name, Description, Placeholder, Default, Height (px, default 150),
+--       Monospace (bool), Callback(text) on focus lost.
+-- =============================================================================
+function Tab:AddTextArea(opts)
+	opts = opts or {}
+	local areaH = opts.Height or 150
+	local headH = opts.Description and 50 or 32
+	local frame = elementFrame(self, headH + areaH)
+	frame.ClipsDescendants = true
+	titleBlock(frame, opts.Name or "Text", opts.Description, 12)
+	self.Window:_index(self, frame, opts.Name or "Text", opts.Description)
+
+	local scroll = new("ScrollingFrame", {
+		Position = UDim2.new(0, 12, 0, headH - 4),
+		Size = UDim2.new(1, -24, 0, areaH - 8),
+		BackgroundColor3 = THEME.Glass,
+		BackgroundTransparency = 0.25,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageTransparency = 0.4,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ZIndex = 5,
+		Parent = frame,
+	}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9), pad(8, 10, 8, 10) })
+
+	local box = new("TextBox", {
+		Size = UDim2.new(1, 0, 1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		ClearTextOnFocus = false,
+		MultiLine = true,
+		TextWrapped = true,
+		TextEditable = true,
+		Font = opts.Monospace and Enum.Font.Code or FONT,
+		TextSize = 13,
+		TextColor3 = THEME.Body,
+		PlaceholderText = opts.Placeholder or "Type here...",
+		PlaceholderColor3 = THEME.Muted,
+		Text = tostring(opts.Default or ""),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		ZIndex = 6,
+		Parent = scroll,
+	})
+
+	box.FocusLost:Connect(function() fire(opts.Callback, box.Text) end)
+
+	local api = {}
+	function api:GetText() return box.Text end
+	function api:SetText(t) box.Text = tostring(t or "") end
+	function api:OnChanged(fn) box:GetPropertyChangedSignal("Text"):Connect(function() fire(fn, box.Text) end) end
+	return api
+end
+
+-- =============================================================================
+-- CreatePanel: a general-purpose, centered, draggable popup window (distinct
+-- from CreateSidePanel, which docks to the dock). Use it for editors and tools
+-- that need their own space. Returns a panel object:
+--   panel:AddTextArea(opts) -> same api as Tab:AddTextArea
+--   panel:AddButton{ Name, Color, Callback } -> { SetText }
+--   panel:AddRow() -> a horizontal container for buttons (auto-lays-out)
+--   panel:Show() / :Hide() / :Toggle() / :IsOpen()
+--   panel:SetTitle(text) / :OnClose(fn) / :Destroy()
+-- opts: Title, Width (default 420), Height (default 360), Acrylic (bool)
+-- =============================================================================
+function Library:CreatePanel(opts)
+	opts = opts or {}
+	local W = opts.Width or 420
+	local H = opts.Height or 360
+	local panel = {}
+
+	local root = new("CanvasGroup", {
+		Name = "PyraPanel",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.fromOffset(W, H),
+		BackgroundColor3 = THEME.Glass,
+		BackgroundTransparency = self.IsMobile and SOLID_T or GLASS_PANEL_T,
+		BorderSizePixel = 0,
+		Visible = false,
+		GroupTransparency = 1,
+		Active = true,
+		ZIndex = 90,
+		Parent = self.Gui,
+	}, { corner(12), stroke(Color3.new(1, 1, 1), 0.86) })
+	if not self.IsMobile and opts.Acrylic then
+		local a = createAcrylic(root)
+		table.insert(self.Acrylic, a)
+	end
+
+	new("ImageLabel", {
+		Name = "Noise", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+		Image = "rbxassetid://9968344227", ImageTransparency = 0.94,
+		ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(128, 128),
+		ZIndex = 2, Parent = root,
+	}, { corner(12) })
+
+	local header = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, ZIndex = 3, Parent = root,
+	})
+	local title = label({
+		Text = opts.Title or "Panel", Font = FONT_BOLD, TextSize = 14,
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0),
+		Size = UDim2.new(1, -60, 1, 0), TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = header,
+	})
+	local closeBtn = new("TextButton", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.fromOffset(28, 28), BackgroundColor3 = THEME.Switch,
+		BackgroundTransparency = 0.3, AutoButtonColor = true,
+		Text = "", ZIndex = 5, Parent = header,
+	}, { corner(7) })
+	local useCloseIcon = type(ICONS.Close) == "string" and ICONS.Close ~= ""
+	if useCloseIcon then
+		new("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(13, 13), BackgroundTransparency = 1,
+			Image = ICONS.Close, ImageColor3 = Color3.fromRGB(235, 120, 120), ZIndex = 6, Parent = closeBtn,
+		})
+	else
+		label({ Text = "✕", Font = FONT_BOLD, TextSize = 13, TextColor3 = Color3.fromRGB(235, 120, 120),
+			Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 6, Parent = closeBtn })
+	end
+
+	-- Body: vertical list the caller fills with text areas / rows.
+	local body = new("Frame", {
+		Position = UDim2.new(0, 0, 0, 40),
+		Size = UDim2.new(1, 0, 1, -40),
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = root,
+	}, {
+		new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+		new("UIPadding", {
+			PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14),
+			PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 12),
+		}),
+	})
+	local order = 0
+	local function nextOrder() order += 1 return order end
+
+	-- Dragging by the header.
+	local dragging, dragStart, startPos = false, Vector2.new(), root.Position
+	local dragBtn = new("TextButton", {
+		Size = UDim2.new(1, -48, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false,
+		Text = "", Active = true, ZIndex = 4, Parent = header,
+	})
+	dragBtn.InputBegan:Connect(function(input)
+		if isPress(input) then
+			dragging = true
+			dragStart = Vector2.new(input.Position.X, input.Position.Y)
+			startPos = root.Position
+		end
+	end)
+	local dragMove = UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local d = Vector2.new(input.Position.X, input.Position.Y) - dragStart
+			root.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+		end
+	end)
+	local dragEnd = UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
+	end)
+	table.insert(self.Connections, dragMove)
+	table.insert(self.Connections, dragEnd)
+
+	local open = false
+	local fadeTok = 0
+	local onClose
+	function panel:Show()
+		if open then return end
+		open = true
+		root.Visible = true
+		fadeTok += 1
+		TweenService:Create(root, TweenInfo.new(0.22, Enum.EasingStyle.Quad), { GroupTransparency = 0 }):Play()
+		playSound(SOUND_CLICK, 0.25, 1.1)
+	end
+	function panel:Hide()
+		if not open then return end
+		open = false
+		fadeTok += 1
+		local myTok = fadeTok
+		TweenService:Create(root, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { GroupTransparency = 1 }):Play()
+		task.delay(0.26, function() if myTok == fadeTok and not open then root.Visible = false end end)
+		if onClose then fire(onClose) end
+	end
+	function panel:Toggle() if open then self:Hide() else self:Show() end end
+	function panel:IsOpen() return open end
+	function panel:SetTitle(t) title.Text = tostring(t) end
+	function panel:OnClose(fn) onClose = fn end
+	function panel:Destroy() pcall(function() root:Destroy() end) end
+
+	closeBtn.Activated:Connect(function() panel:Hide() end)
+
+	-- Panel content builders.
+	function panel:AddTextArea(o)
+		o = o or {}
+		local areaH = o.Height or 180
+		local wrap = new("Frame", {
+			Size = UDim2.new(1, 0, 0, areaH),
+			BackgroundTransparency = 1,
+			LayoutOrder = nextOrder(),
+			ZIndex = 4,
+			Parent = body,
+		})
+		local scroll = new("ScrollingFrame", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = THEME.Glass,
+			BackgroundTransparency = 0.25,
+			BorderSizePixel = 0,
+			ScrollBarThickness = 4,
+			ScrollBarImageTransparency = 0.4,
+			CanvasSize = UDim2.new(0, 0, 0, 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ZIndex = 5,
+			Parent = wrap,
+		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9), pad(8, 10, 8, 10) })
+		local box = new("TextBox", {
+			Size = UDim2.new(1, 0, 1, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			ClearTextOnFocus = false,
+			MultiLine = true, TextWrapped = true, TextEditable = true,
+			Font = o.Monospace and Enum.Font.Code or FONT,
+			TextSize = 13, TextColor3 = THEME.Body,
+			PlaceholderText = o.Placeholder or "",
+			PlaceholderColor3 = THEME.Muted,
+			Text = tostring(o.Default or ""),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			ZIndex = 6, Parent = scroll,
+		})
+		box.FocusLost:Connect(function() fire(o.Callback, box.Text) end)
+		local a = {}
+		function a:GetText() return box.Text end
+		function a:SetText(t) box.Text = tostring(t or "") end
+		return a
+	end
+
+	function panel:AddRow()
+		local row = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 34),
+			BackgroundTransparency = 1,
+			LayoutOrder = nextOrder(),
+			ZIndex = 4,
+			Parent = body,
+		}, {
+			new("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+		})
+		local rowApi = {}
+		local rord = 0
+		function rowApi:AddButton(o)
+			o = o or {}
+			rord += 1
+			local b = new("TextButton", {
+				Size = UDim2.fromOffset(0, 30),
+				AutomaticSize = Enum.AutomaticSize.X,
+				BackgroundColor3 = o.Color or THEME.Switch,
+				BackgroundTransparency = 0.15,
+				Text = o.Name or "Button",
+				Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.Text,
+				AutoButtonColor = true, LayoutOrder = rord, ZIndex = 5, Parent = row,
+			}, { corner(7), pad(0, 12, 0, 12) })
+			b.Activated:Connect(function() playSound(SOUND_CLICK, 0.3) fire(o.Callback) end)
+			local ba = {}
+			function ba:SetText(t) b.Text = tostring(t) end
+			return ba
+		end
+		return rowApi
+	end
+
+	function panel:AddButton(o)
+		local row = self:AddRow()
+		return row:AddButton(o)
+	end
+
+	self:OnDestroy(function() panel:Destroy() end)
+	return panel
+end
+
 Library.Icons = ICONS
 Library.GuiParentKind = function() return GUI_PARENT_KIND end
 
