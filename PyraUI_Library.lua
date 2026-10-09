@@ -2087,15 +2087,24 @@ function Library:SetFPSCap(n)
 		or (fluxus and (fluxus.setfpscap or fluxus.set_fps_cap))
 	if type(fn) == "function" and pcall(fn, n) then return true, "executor" end
 
-	local okSettings = pcall(function() settings().Rendering.FramerateCap = n end)
-	if okSettings then return true, "settings" end
-
+	local capped = math.min(math.max(math.floor(n), 1), 10000)
 	if type(setfflag) == "function" then
-		local capped = math.min(math.floor(n), 10000)
-		if pcall(setfflag, "DFIntTaskSchedulerTargetFps", tostring(capped)) then
-			return true, "fflag"
+		local hit = false
+		if pcall(setfflag, "DFIntTaskSchedulerTargetFps", tostring(capped)) then hit = true end
+		pcall(setfflag, "FFlagTaskSchedulerLimitTargetFpsTo2402", "False")
+		pcall(setfflag, "DFFlagTaskSchedulerUseNewFrameRateController", "True")
+		if hit then return true, "fflag" end
+	end
+
+	local sched = (type(getscheduler) == "function" and select(2, pcall(getscheduler)))
+	if typeof(sched) == "Instance" or type(sched) == "userdata" then
+		if pcall(function() sched.FrameRateManager.TargetFps = capped end) then
+			return true, "scheduler"
 		end
 	end
+
+	local okSettings = pcall(function() settings().Rendering.FramerateCap = n end)
+	if okSettings then return true, "settings" end
 	return false
 end
 
