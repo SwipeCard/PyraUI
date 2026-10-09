@@ -5191,7 +5191,7 @@ end
 -- =============================================================================
 function Library:CreatePanel(opts)
 	opts = opts or {}
-	local W = opts.Width or 420
+	local W = opts.Width or 380
 	local H = opts.Height or 360
 	local panel = {}
 
@@ -5208,7 +5208,7 @@ function Library:CreatePanel(opts)
 		Active = true,
 		ZIndex = 90,
 		Parent = self.Gui,
-	}, { corner(12), stroke(Color3.new(1, 1, 1), 0.86) })
+	}, { corner(12), stroke(Color3.new(1, 1, 1), 0.88) })
 	if not self.IsMobile and opts.Acrylic then
 		local a = createAcrylic(root)
 		table.insert(self.Acrylic, a)
@@ -5221,34 +5221,89 @@ function Library:CreatePanel(opts)
 		ZIndex = 2, Parent = root,
 	}, { corner(12) })
 
+	-- Header matches the Target side panel: centered bold title, flat icon
+	-- buttons (no filled background) for pin + close on the right.
 	local header = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, ZIndex = 3, Parent = root,
 	})
 	local title = label({
 		Text = opts.Title or "Panel", Font = FONT_BOLD, TextSize = 14,
-		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0),
-		Size = UDim2.new(1, -60, 1, 0), TextXAlignment = Enum.TextXAlignment.Left,
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(1, -96, 1, 0),
+		TextXAlignment = Enum.TextXAlignment.Center,
 		TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = header,
 	})
+
+	-- Close button (flat, icon only).
 	local closeBtn = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.fromOffset(28, 28), BackgroundColor3 = THEME.Switch,
-		BackgroundTransparency = 0.3, AutoButtonColor = true,
-		Text = "", ZIndex = 5, Parent = header,
+		Size = UDim2.fromOffset(28, 28), BackgroundColor3 = THEME.Card,
+		BackgroundTransparency = 1, AutoButtonColor = false,
+		Text = "", ZIndex = 4, Parent = header,
 	}, { corner(7) })
 	local useCloseIcon = type(ICONS.Close) == "string" and ICONS.Close ~= ""
+	local closeImg, closeGlyph
 	if useCloseIcon then
-		new("ImageLabel", {
+		closeImg = new("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(13, 13), BackgroundTransparency = 1,
-			Image = ICONS.Close, ImageColor3 = Color3.fromRGB(235, 120, 120), ZIndex = 6, Parent = closeBtn,
+			Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+			Image = ICONS.Close, ImageColor3 = THEME.SubText, ZIndex = 5, Parent = closeBtn,
 		})
 	else
-		label({ Text = "✕", Font = FONT_BOLD, TextSize = 13, TextColor3 = Color3.fromRGB(235, 120, 120),
-			Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 6, Parent = closeBtn })
+		closeGlyph = label({
+			Text = "✕", Font = FONT_BOLD, TextSize = 13, TextColor3 = THEME.SubText,
+			Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 5, Parent = closeBtn,
+		})
 	end
+	closeBtn.MouseEnter:Connect(function()
+		if closeImg then tween(closeImg, 0.15, { ImageColor3 = Color3.fromRGB(235, 120, 120) }) end
+		if closeGlyph then tween(closeGlyph, 0.15, { TextColor3 = Color3.fromRGB(235, 120, 120) }) end
+	end)
+	closeBtn.MouseLeave:Connect(function()
+		if closeImg then tween(closeImg, 0.15, { ImageColor3 = THEME.SubText }) end
+		if closeGlyph then tween(closeGlyph, 0.15, { TextColor3 = THEME.SubText }) end
+	end)
 
-	-- Body: vertical list the caller fills with text areas / rows.
+	-- Pin button (flat, icon only) — keeps the panel open; purely a user hint
+	-- plus an OnPin callback, like the side panel's pin.
+	local pinned = opts.Pinned == true
+	local pinBtn = new("TextButton", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -42, 0.5, 0),
+		Size = UDim2.fromOffset(28, 28), BackgroundColor3 = THEME.Card,
+		BackgroundTransparency = 1, AutoButtonColor = false,
+		Text = "", ZIndex = 4, Parent = header,
+	}, { corner(7) })
+	local usePinIcon = type(ICONS.Pin) == "string" and ICONS.Pin ~= ""
+	local pinSel = type(ICONS.Pin_Selected) == "string" and ICONS.Pin_Selected ~= ""
+	local pinImg, pinGlyph
+	if usePinIcon then
+		pinImg = new("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+			Image = ICONS.Pin, ImageColor3 = THEME.SubText, ZIndex = 5, Parent = pinBtn,
+		})
+	else
+		pinGlyph = label({
+			Text = "\xF0\x9F\x93\x8C", TextSize = 13, Size = UDim2.fromScale(1, 1),
+			TextTransparency = 0.4, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 5, Parent = pinBtn,
+		})
+	end
+	local onPin
+	local function applyPin()
+		if pinImg then
+			if pinSel then pinImg.Image = pinned and ICONS.Pin_Selected or ICONS.Pin end
+			pinImg.ImageColor3 = pinned and THEME.Accent or THEME.SubText
+		end
+		if pinGlyph then pinGlyph.TextTransparency = pinned and 0 or 0.4 end
+	end
+	function panel:SetPinned(on) pinned = on == true; applyPin(); if onPin then fire(onPin, pinned) end end
+	function panel:IsPinned() return pinned end
+	function panel:OnPin(fn) onPin = fn end
+	pinBtn.Activated:Connect(function() panel:SetPinned(not pinned) end)
+	pinBtn.MouseEnter:Connect(function() if not pinned and pinImg then tween(pinImg, 0.15, { ImageColor3 = THEME.Text }) end end)
+	pinBtn.MouseLeave:Connect(function() if not pinned and pinImg then tween(pinImg, 0.15, { ImageColor3 = THEME.SubText }) end end)
+
+	-- Body: vertical list the caller fills.
 	local body = new("Frame", {
 		Position = UDim2.new(0, 0, 0, 40),
 		Size = UDim2.new(1, 0, 1, -40),
@@ -5265,11 +5320,11 @@ function Library:CreatePanel(opts)
 	local order = 0
 	local function nextOrder() order += 1 return order end
 
-	-- Dragging by the header.
+	-- Dragging by the header (title region, not the buttons).
 	local dragging, dragStart, startPos = false, Vector2.new(), root.Position
 	local dragBtn = new("TextButton", {
-		Size = UDim2.new(1, -48, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false,
-		Text = "", Active = true, ZIndex = 4, Parent = header,
+		Size = UDim2.new(1, -90, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false,
+		Text = "", Active = true, ZIndex = 3, Parent = header,
 	})
 	dragBtn.InputBegan:Connect(function(input)
 		if isPress(input) then
@@ -5316,9 +5371,10 @@ function Library:CreatePanel(opts)
 	function panel:OnClose(fn) onClose = fn end
 	function panel:Destroy() pcall(function() root:Destroy() end) end
 
+	applyPin()
 	closeBtn.Activated:Connect(function() panel:Hide() end)
 
-	-- Panel content builders.
+	-- Content builders.
 	function panel:AddTextArea(o)
 		o = o or {}
 		local areaH = o.Height or 180
@@ -5331,8 +5387,8 @@ function Library:CreatePanel(opts)
 		})
 		local scroll = new("ScrollingFrame", {
 			Size = UDim2.fromScale(1, 1),
-			BackgroundColor3 = THEME.Glass,
-			BackgroundTransparency = 0.25,
+			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
+			BackgroundTransparency = 0.2,
 			BorderSizePixel = 0,
 			ScrollBarThickness = 4,
 			ScrollBarImageTransparency = 0.4,
@@ -5365,7 +5421,7 @@ function Library:CreatePanel(opts)
 
 	function panel:AddRow()
 		local row = new("Frame", {
-			Size = UDim2.new(1, 0, 0, 34),
+			Size = UDim2.new(1, 0, 0, 32),
 			BackgroundTransparency = 1,
 			LayoutOrder = nextOrder(),
 			ZIndex = 4,
@@ -5384,14 +5440,14 @@ function Library:CreatePanel(opts)
 			o = o or {}
 			rord += 1
 			local b = new("TextButton", {
-				Size = UDim2.fromOffset(0, 30),
+				Size = UDim2.fromOffset(0, 28),
 				AutomaticSize = Enum.AutomaticSize.X,
 				BackgroundColor3 = o.Color or THEME.Switch,
-				BackgroundTransparency = 0.15,
+				BackgroundTransparency = 0.12,
 				Text = o.Name or "Button",
 				Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.Text,
 				AutoButtonColor = true, LayoutOrder = rord, ZIndex = 5, Parent = row,
-			}, { corner(7), pad(0, 12, 0, 12) })
+			}, { corner(7), pad(0, 14, 0, 14) })
 			b.Activated:Connect(function() playSound(SOUND_CLICK, 0.3) fire(o.Callback) end)
 			local ba = {}
 			function ba:SetText(t) b.Text = tostring(t) end
