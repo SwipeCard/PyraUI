@@ -5377,7 +5377,7 @@ function Library:CreatePanel(opts)
 		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = UDim2.fromOffset(W, H),
 		BackgroundColor3 = THEME.Glass,
-		BackgroundTransparency = self.IsMobile and SOLID_T or GLASS_PANEL_T,
+		BackgroundTransparency = (self.IsMobile or not self.AcrylicEnabled) and SOLID_T or GLASS_PANEL_T,
 		BorderSizePixel = 0,
 		Visible = false,
 		GroupTransparency = 1,
