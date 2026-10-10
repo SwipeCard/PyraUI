@@ -72,7 +72,7 @@ local THEME = {
 
 local GLASS_DOCK_T  = 0.28
 local GLASS_PANEL_T = 0.34
-local SOLID_T       = 0
+local SOLID_T       = 0.06
 local CARD_T        = 0.955
 local CARD_HOVER_T  = 0.93
 
@@ -579,14 +579,9 @@ function Library.new(config)
 	self.ScaleMultiplier = 1
 	self.Connections = {}
 
-	-- Config flag registry: controls created with a Flag option register their
-	-- api here so SaveConfig/LoadConfig can serialize them. [flagName] = {api, kind}
-	self.Flags = {}
-	self._flagOrder = {}
-
 	self.SessionStart = (type(config.SessionStart) == "number" and config.SessionStart > 0) and config.SessionStart or nil
 	self.IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
-	self.AcrylicEnabled = false
+	self.AcrylicEnabled = not self.IsMobile
 	self.WorldDimEnabled = true
 	self.WorldDimPersistent = false
 	self.ParallaxEnabled = false
@@ -665,7 +660,6 @@ function Library.new(config)
 		Position = UDim2.new(0, 0, 0, DOCK_H + GAP),
 		Size = UDim2.new(1, 0, 0, PANEL_H),
 		ClipsDescendants = true,
-		Active = true,
 		ZIndex = 1,
 		Parent = self.Holder,
 	})
@@ -950,7 +944,6 @@ function Library.new(config)
 		Name = "Footer",
 		Position = UDim2.new(0, 0, 0, self.FooterY),
 		Size = UDim2.new(1, 0, 0, FOOTER_H),
-		Active = true,
 		ZIndex = 1,
 		Parent = self.Holder,
 	})
@@ -2352,86 +2345,6 @@ function Library:_index(tab, frame, name, desc)
 	})
 end
 
--- Register a control's api under a flag name so it can be saved/loaded.
--- kind: "toggle" | "slider" | "dropdown" | "input" | "keybind" | "color" | "range"
-function Library:_registerFlag(flag, api, kind)
-	if type(flag) ~= "string" or flag == "" or not api then return end
-	if not self.Flags[flag] then table.insert(self._flagOrder, flag) end
-	self.Flags[flag] = { api = api, kind = kind }
-end
-
--- Serialize one flag's current value into a plain JSON-safe value.
-local function _flagSerialize(entry)
-	local api, kind = entry.api, entry.kind
-	local ok, v = pcall(api.Get, api)
-	if not ok then return nil end
-	if kind == "color" then
-		if typeof(v) == "Color3" then return { r = v.R, g = v.G, b = v.B } end
-		return nil
-	elseif kind == "keybind" then
-		if typeof(v) == "EnumItem" then return v.Name end
-		return nil
-	elseif kind == "range" then
-		-- Get() returns two numbers
-		local ok2, a, b = pcall(api.Get, api)
-		if ok2 then return { a, b } end
-		return nil
-	elseif kind == "randomslider" then
-		if type(api.Config) == "function" then
-			local ok3, cfg = pcall(api.Config, api)
-			if ok3 then return cfg end
-		end
-		return nil
-	end
-	return v -- toggle(bool)/slider(num)/dropdown(str)/input(str)
-end
-
-local function _flagApply(entry, value)
-	local api, kind = entry.api, entry.kind
-	if value == nil then return end
-	if kind == "color" then
-		if type(value) == "table" and value.r then
-			pcall(api.Set, api, Color3.new(value.r, value.g, value.b))
-		end
-	elseif kind == "keybind" then
-		if type(value) == "string" and Enum.KeyCode[value] then
-			pcall(api.Set, api, Enum.KeyCode[value])
-		end
-	elseif kind == "range" then
-		if type(value) == "table" then pcall(api.Set, api, value[1], value[2]) end
-	elseif kind == "randomslider" then
-		if type(value) == "table" then
-			if type(api.SetRandomize) == "function" then pcall(api.SetRandomize, api, value.randomize == true) end
-			if value.randomize then
-				pcall(api.Set, api, value.min, value.max)
-			else
-				pcall(api.Set, api, value.value)
-			end
-		end
-	else
-		pcall(api.Set, api, value)
-	end
-end
-
--- Collect all registered flags into a table.
-function Library:GetConfig()
-	local out = {}
-	for flag, entry in pairs(self.Flags) do
-		local v = _flagSerialize(entry)
-		if v ~= nil then out[flag] = v end
-	end
-	return out
-end
-
--- Apply a table of flag values to the registered controls.
-function Library:SetConfig(data)
-	if type(data) ~= "table" then return end
-	for _, flag in ipairs(self._flagOrder) do
-		local entry = self.Flags[flag]
-		if entry and data[flag] ~= nil then _flagApply(entry, data[flag]) end
-	end
-end
-
 function Library:_resolveTabName(entry)
 	if entry.tab then return entry.tab end
 	for _, t in ipairs(self.Tabs) do
@@ -3239,8 +3152,6 @@ function Tab:AddToggle(opts)
 
 	local bigIcon
 	local switch, knob
-	local checkbox, checkMark
-	local isCheckbox = opts.Checkbox == true and not iconToggle and not sliderOpts
 	if iconToggle then
 
 		bigIcon = new("ImageLabel", {
@@ -3254,31 +3165,6 @@ function Tab:AddToggle(opts)
 			ZIndex = 4,
 			Parent = frame,
 		})
-	elseif isCheckbox then
-		-- Square selection box with a checkmark, instead of the pill switch.
-		checkbox = new("Frame", {
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -12, 0.5, 0),
-			Size = UDim2.fromOffset(22, 22),
-			BackgroundColor3 = THEME.Switch,
-			BorderSizePixel = 0,
-			ZIndex = 4,
-			Parent = frame,
-		}, { corner(6), stroke(Color3.new(1, 1, 1), 0.86) })
-		local useCheckIcon = type(ICONS.Check) == "string" and ICONS.Check ~= ""
-		if useCheckIcon then
-			checkMark = new("ImageLabel", {
-				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
-				Image = ICONS.Check, ImageColor3 = THEME.Text, ImageTransparency = 1, ZIndex = 5, Parent = checkbox,
-			})
-		else
-			checkMark = label({
-				Text = "✓", Font = FONT_BOLD, TextSize = 14, TextColor3 = THEME.Text,
-				Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center,
-				TextTransparency = 1, ZIndex = 5, Parent = checkbox,
-			})
-		end
 	else
 		local switchY = sliderOpts and UDim2.new(1, -12, 0, 16) or UDim2.new(1, -12, 0.5, 0)
 		switch = new("Frame", {
@@ -3317,16 +3203,6 @@ function Tab:AddToggle(opts)
 					bigIcon.Image = state and iconSel or iconBase
 				end
 				TweenService:Create(bigIcon, info, { ImageColor3 = state and self.Accent or THEME.SubText }):Play()
-			end
-		elseif isCheckbox then
-			TweenService:Create(checkbox, info, { BackgroundColor3 = state and self.Accent or THEME.Switch }):Play()
-			if checkMark then
-				if checkMark:IsA("ImageLabel") then
-					TweenService:Create(checkMark, info, { ImageColor3 = self.AccentInverse, ImageTransparency = state and 0 or 1 }):Play()
-				else
-					checkMark.TextColor3 = self.AccentInverse
-					TweenService:Create(checkMark, info, { TextTransparency = state and 0 or 1 }):Play()
-				end
 			end
 		else
 			TweenService:Create(switch, info, { BackgroundColor3 = state and self.Accent or THEME.Switch }):Play()
@@ -3686,7 +3562,6 @@ function Tab:AddToggle(opts)
 	end
 
 	render(true)
-	self.Window:_registerFlag(opts.Flag, api, "toggle")
 	return api
 end
 
@@ -3974,7 +3849,6 @@ function Tab:AddSlider(opts)
 
 	value = snap(opts.Default or min)
 	render(true)
-	self.Window:_registerFlag(opts.Flag, api, "slider")
 	return api
 end
 
@@ -4057,55 +3931,11 @@ function Tab:AddDropdown(opts)
 		Position = UDim2.fromOffset(12, 0), Size = UDim2.new(0.5, -12, 0, HEADER), ZIndex = 4, Parent = frame,
 	})
 	self.Window:_index(self, frame, opts.Name or "Dropdown", opts.Description)
-
-	-- Optional inline toggle chip on the header (e.g. an "Auto Rejoin" switch
-	-- living inside a device-select dropdown). Tapping it toggles independently
-	-- of the dropdown opening.
-	local hasChip = type(opts.Chip) == "string"
-	local chipState = opts.ChipDefault == true
-	local chipBtn, chipDot, chipLabel
-	local currentRightInset = 34
-	if hasChip then
-		currentRightInset = 118
-		chipBtn = new("TextButton", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -34, 0.5, 0),
-			Size = UDim2.fromOffset(78, 20), BackgroundColor3 = THEME.Switch,
-			BackgroundTransparency = 0.15, AutoButtonColor = true, Text = "", ZIndex = 7, Parent = frame,
-		}, { corner(10), stroke(Color3.new(1, 1, 1), 0.88) })
-		chipDot = new("Frame", {
-			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 4, 0.5, 0),
-			Size = UDim2.fromOffset(12, 12), BackgroundColor3 = THEME.SubText, BorderSizePixel = 0,
-			ZIndex = 8, Parent = chipBtn,
-		}, { round() })
-		chipLabel = label({
-			Text = opts.Chip, Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
-			Size = UDim2.fromOffset(56, 14), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 8, Parent = chipBtn,
-		})
-	end
-
 	local current = label({
 		TextSize = 12, TextColor3 = THEME.SubText,
-		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -currentRightInset, 0, 0), Size = UDim2.new(0.5, -currentRightInset, 0, HEADER),
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -34, 0, 0), Size = UDim2.new(0.5, -34, 0, HEADER),
 		TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = frame,
 	})
-
-	if hasChip then
-		local function renderChip(instant)
-			local t = instant and 0 or 0.2
-			tween(chipBtn, t, { BackgroundColor3 = chipState and self.Accent or THEME.Switch })
-			tween(chipDot, t, { BackgroundColor3 = chipState and self.AccentInverse or THEME.SubText,
-				Position = chipState and UDim2.new(1, -16, 0.5, 0) or UDim2.new(0, 4, 0.5, 0) })
-			tween(chipLabel, t, { TextColor3 = chipState and self.AccentInverse or THEME.SubText })
-		end
-		renderChip(true)
-		chipBtn.Activated:Connect(function()
-			chipState = not chipState
-			renderChip(false)
-			playSound(SOUND_CLICK, 0.3)
-			fire(opts.ChipCallback, chipState)
-		end)
-	end
 	local arrowUseIcon = type(ICONS.Arrow) == "string" and ICONS.Arrow ~= ""
 	local arrow
 	if arrowUseIcon then
@@ -4222,7 +4052,6 @@ function Tab:AddDropdown(opts)
 
 	header.Activated:Connect(function() api:SetOpen(not isOpen) end)
 	refresh(true)
-	self.Window:_registerFlag(opts.Flag, api, "dropdown")
 	return api
 end
 
@@ -4362,7 +4191,6 @@ function Tab:AddColorPicker(opts)
 	header.Activated:Connect(function() api:SetOpen(not isOpen) end)
 	swatch.BackgroundColor3 = Color3.fromHSV(h, s, v)
 	render(false)
-	self.Window:_registerFlag(opts.Flag, api, "color")
 	return api
 end
 
@@ -4523,7 +4351,6 @@ function Tab:AddRangeSlider(opts)
 	end)
 
 	render(true)
-	self.Window:_registerFlag(opts.Flag, api, "range")
 	return api
 end
 
@@ -4827,7 +4654,6 @@ function Tab:AddRandomSlider(opts)
 	rngChip.TextColor3 = randomize and self.AccentInverse or THEME.Text
 	rngChip.BackgroundColor3 = randomize and self.Accent or THEME.Switch
 	render(true)
-	self.Window:_registerFlag(opts.Flag, api, "randomslider")
 	return api
 end
 
@@ -4890,7 +4716,6 @@ function Tab:AddKeybind(opts)
 	end)
 
 	render()
-	self.Window:_registerFlag(opts.Flag, api, "keybind")
 	return api
 end
 
@@ -5073,7 +4898,6 @@ function Tab:AddInput(opts)
 		if box:IsFocused() then box:ReleaseFocus() end
 		if isSearch then setSearch(false) end
 	end
-	self.Window:_registerFlag(opts.Flag, api, "input")
 	return api
 end
 
@@ -5293,392 +5117,6 @@ function Tab:AddPlayerSearch(opts)
 	searchBtn.MouseLeave:Connect(function() tween(searchBtn, 0.15, { BackgroundTransparency = 0.82 }) end)
 
 	return api
-end
-
--- =============================================================================
--- AddTextArea: a tall, multi-line, scrolling text box element. Good for long
--- pasted content (configs, flag lists, notes). Returns an api with GetText /
--- SetText / OnChanged.
--- opts: Name, Description, Placeholder, Default, Height (px, default 150),
---       Monospace (bool), Callback(text) on focus lost.
--- =============================================================================
-function Tab:AddTextArea(opts)
-	opts = opts or {}
-	local areaH = opts.Height or 150
-	local headH = opts.Description and 50 or 32
-	local frame = elementFrame(self, headH + areaH)
-	frame.ClipsDescendants = true
-	titleBlock(frame, opts.Name or "Text", opts.Description, 12)
-	self.Window:_index(self, frame, opts.Name or "Text", opts.Description)
-
-	local scroll = new("ScrollingFrame", {
-		Position = UDim2.new(0, 12, 0, headH - 4),
-		Size = UDim2.new(1, -24, 0, areaH - 8),
-		BackgroundColor3 = THEME.Glass,
-		BackgroundTransparency = 0.25,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		ScrollBarImageTransparency = 0.4,
-		CanvasSize = UDim2.new(0, 0, 0, 0),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ZIndex = 5,
-		Parent = frame,
-	}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9), pad(8, 10, 8, 10) })
-
-	local box = new("TextBox", {
-		Size = UDim2.new(1, 0, 1, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1,
-		ClearTextOnFocus = false,
-		MultiLine = true,
-		TextWrapped = true,
-		TextEditable = true,
-		Font = opts.Monospace and Enum.Font.Code or FONT,
-		TextSize = 13,
-		TextColor3 = THEME.Body,
-		PlaceholderText = opts.Placeholder or "Type here...",
-		PlaceholderColor3 = THEME.Muted,
-		Text = tostring(opts.Default or ""),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		ZIndex = 6,
-		Parent = scroll,
-	})
-
-	box.FocusLost:Connect(function() fire(opts.Callback, box.Text) end)
-
-	local api = {}
-	function api:GetText() return box.Text end
-	function api:SetText(t) box.Text = tostring(t or "") end
-	function api:OnChanged(fn) box:GetPropertyChangedSignal("Text"):Connect(function() fire(fn, box.Text) end) end
-	return api
-end
-
--- =============================================================================
--- CreatePanel: a general-purpose, centered, draggable popup window (distinct
--- from CreateSidePanel, which docks to the dock). Use it for editors and tools
--- that need their own space. Returns a panel object:
---   panel:AddTextArea(opts) -> same api as Tab:AddTextArea
---   panel:AddButton{ Name, Color, Callback } -> { SetText }
---   panel:AddRow() -> a horizontal container for buttons (auto-lays-out)
---   panel:Show() / :Hide() / :Toggle() / :IsOpen()
---   panel:SetTitle(text) / :OnClose(fn) / :Destroy()
--- opts: Title, Width (default 420), Height (default 360), Acrylic (bool)
--- =============================================================================
-function Library:CreatePanel(opts)
-	opts = opts or {}
-	local W = opts.Width or 380
-	local H = opts.Height or 360
-	local panel = {}
-
-	local root = new("CanvasGroup", {
-		Name = "PyraPanel",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.fromOffset(W, H),
-		BackgroundColor3 = THEME.Glass,
-		BackgroundTransparency = (self.IsMobile or not self.AcrylicEnabled) and SOLID_T or GLASS_PANEL_T,
-		BorderSizePixel = 0,
-		Visible = false,
-		GroupTransparency = 1,
-		Active = true,
-		ZIndex = 90,
-		Parent = self.Gui,
-	}, { corner(12), stroke(Color3.new(1, 1, 1), 0.88) })
-	if not self.IsMobile and opts.Acrylic then
-		local a = createAcrylic(root)
-		table.insert(self.Acrylic, a)
-	end
-
-	new("ImageLabel", {
-		Name = "Noise", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
-		Image = "rbxassetid://9968344227", ImageTransparency = 0.94,
-		ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(128, 128),
-		ZIndex = 2, Parent = root,
-	}, { corner(12) })
-
-	-- Header matches the Target side panel: centered bold title, flat icon
-	-- buttons (no filled background) for pin + close on the right.
-	local header = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, ZIndex = 3, Parent = root,
-	})
-	local title = label({
-		Text = opts.Title or "Panel", Font = FONT_BOLD, TextSize = 14,
-		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.new(1, -96, 1, 0),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = header,
-	})
-
-	-- Close button (flat, icon only).
-	local closeBtn = new("TextButton", {
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.fromOffset(28, 28), BackgroundColor3 = THEME.Card,
-		BackgroundTransparency = 1, AutoButtonColor = false,
-		Text = "", ZIndex = 4, Parent = header,
-	}, { corner(7) })
-	local useCloseIcon = type(ICONS.Close) == "string" and ICONS.Close ~= ""
-	local closeImg, closeGlyph
-	if useCloseIcon then
-		closeImg = new("ImageLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
-			Image = ICONS.Close, ImageColor3 = THEME.SubText, ZIndex = 5, Parent = closeBtn,
-		})
-	else
-		closeGlyph = label({
-			Text = "✕", Font = FONT_BOLD, TextSize = 13, TextColor3 = THEME.SubText,
-			Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 5, Parent = closeBtn,
-		})
-	end
-	closeBtn.MouseEnter:Connect(function()
-		if closeImg then tween(closeImg, 0.15, { ImageColor3 = Color3.fromRGB(235, 120, 120) }) end
-		if closeGlyph then tween(closeGlyph, 0.15, { TextColor3 = Color3.fromRGB(235, 120, 120) }) end
-	end)
-	closeBtn.MouseLeave:Connect(function()
-		if closeImg then tween(closeImg, 0.15, { ImageColor3 = THEME.SubText }) end
-		if closeGlyph then tween(closeGlyph, 0.15, { TextColor3 = THEME.SubText }) end
-	end)
-
-	-- Pin button (flat, icon only) — keeps the panel open; purely a user hint
-	-- plus an OnPin callback, like the side panel's pin.
-	local pinned = opts.Pinned == true
-	local pinBtn = new("TextButton", {
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -42, 0.5, 0),
-		Size = UDim2.fromOffset(28, 28), BackgroundColor3 = THEME.Card,
-		BackgroundTransparency = 1, AutoButtonColor = false,
-		Text = "", ZIndex = 4, Parent = header,
-	}, { corner(7) })
-	local usePinIcon = type(ICONS.Pin) == "string" and ICONS.Pin ~= ""
-	local pinSel = type(ICONS.Pin_Selected) == "string" and ICONS.Pin_Selected ~= ""
-	local pinImg, pinGlyph
-	if usePinIcon then
-		pinImg = new("ImageLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
-			Image = ICONS.Pin, ImageColor3 = THEME.SubText, ZIndex = 5, Parent = pinBtn,
-		})
-	else
-		pinGlyph = label({
-			Text = "\xF0\x9F\x93\x8C", TextSize = 13, Size = UDim2.fromScale(1, 1),
-			TextTransparency = 0.4, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 5, Parent = pinBtn,
-		})
-	end
-	local onPin
-	local function applyPin()
-		if pinImg then
-			if pinSel then pinImg.Image = pinned and ICONS.Pin_Selected or ICONS.Pin end
-			pinImg.ImageColor3 = pinned and THEME.Accent or THEME.SubText
-		end
-		if pinGlyph then pinGlyph.TextTransparency = pinned and 0 or 0.4 end
-	end
-	function panel:SetPinned(on) pinned = on == true; applyPin(); if onPin then fire(onPin, pinned) end end
-	function panel:IsPinned() return pinned end
-	function panel:OnPin(fn) onPin = fn end
-	pinBtn.Activated:Connect(function() panel:SetPinned(not pinned) end)
-	pinBtn.MouseEnter:Connect(function() if not pinned and pinImg then tween(pinImg, 0.15, { ImageColor3 = THEME.Text }) end end)
-	pinBtn.MouseLeave:Connect(function() if not pinned and pinImg then tween(pinImg, 0.15, { ImageColor3 = THEME.SubText }) end end)
-
-	-- Body: vertical list the caller fills.
-	local body = new("Frame", {
-		Position = UDim2.new(0, 0, 0, 40),
-		Size = UDim2.new(1, 0, 1, -40),
-		BackgroundTransparency = 1,
-		ZIndex = 3,
-		Parent = root,
-	}, {
-		new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
-		new("UIPadding", {
-			PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14),
-			PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 12),
-		}),
-	})
-	local order = 0
-	local function nextOrder() order += 1 return order end
-
-	-- Dragging by the header (title region, not the buttons).
-	local dragging, dragStart, startPos = false, Vector2.new(), root.Position
-	local dragBtn = new("TextButton", {
-		Size = UDim2.new(1, -90, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false,
-		Text = "", Active = true, ZIndex = 3, Parent = header,
-	})
-	dragBtn.InputBegan:Connect(function(input)
-		if isPress(input) then
-			dragging = true
-			dragStart = Vector2.new(input.Position.X, input.Position.Y)
-			startPos = root.Position
-		end
-	end)
-	local dragMove = UserInputService.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			local d = Vector2.new(input.Position.X, input.Position.Y) - dragStart
-			root.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-		end
-	end)
-	local dragEnd = UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
-	end)
-	table.insert(self.Connections, dragMove)
-	table.insert(self.Connections, dragEnd)
-
-	local open = false
-	local fadeTok = 0
-	local onClose
-	function panel:Show()
-		if open then return end
-		open = true
-		root.Visible = true
-		fadeTok += 1
-		TweenService:Create(root, TweenInfo.new(0.22, Enum.EasingStyle.Quad), { GroupTransparency = 0 }):Play()
-		playSound(SOUND_CLICK, 0.25, 1.1)
-	end
-	function panel:Hide()
-		if not open then return end
-		open = false
-		fadeTok += 1
-		local myTok = fadeTok
-		TweenService:Create(root, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { GroupTransparency = 1 }):Play()
-		task.delay(0.26, function() if myTok == fadeTok and not open then root.Visible = false end end)
-		if onClose then fire(onClose) end
-	end
-	function panel:Toggle() if open then self:Hide() else self:Show() end end
-	function panel:IsOpen() return open end
-	function panel:SetTitle(t) title.Text = tostring(t) end
-	function panel:OnClose(fn) onClose = fn end
-	function panel:Destroy() pcall(function() root:Destroy() end) end
-
-	applyPin()
-	closeBtn.Activated:Connect(function() panel:Hide() end)
-
-	-- Content builders.
-	function panel:AddTextArea(o)
-		o = o or {}
-		local areaH = o.Height or 180
-		local wrap = new("Frame", {
-			Size = UDim2.new(1, 0, 0, areaH),
-			BackgroundTransparency = 1,
-			LayoutOrder = nextOrder(),
-			ZIndex = 4,
-			Parent = body,
-		})
-		local scroll = new("ScrollingFrame", {
-			Size = UDim2.fromScale(1, 1),
-			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
-			BackgroundTransparency = 0.2,
-			BorderSizePixel = 0,
-			ScrollBarThickness = 4,
-			ScrollBarImageTransparency = 0.4,
-			CanvasSize = UDim2.new(0, 0, 0, 0),
-			AutomaticCanvasSize = Enum.AutomaticSize.Y,
-			ZIndex = 5,
-			Parent = wrap,
-		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9), pad(8, 10, 8, 10) })
-		local box = new("TextBox", {
-			Size = UDim2.new(1, 0, 1, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundTransparency = 1,
-			ClearTextOnFocus = false,
-			MultiLine = true, TextWrapped = true, TextEditable = true,
-			Font = o.Monospace and Enum.Font.Code or FONT,
-			TextSize = 13, TextColor3 = THEME.Body,
-			PlaceholderText = o.Placeholder or "",
-			PlaceholderColor3 = THEME.Muted,
-			Text = tostring(o.Default or ""),
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			ZIndex = 6, Parent = scroll,
-		})
-		box.FocusLost:Connect(function() fire(o.Callback, box.Text) end)
-		local a = {}
-		function a:GetText() return box.Text end
-		function a:SetText(t) box.Text = tostring(t or "") end
-		return a
-	end
-
-	function panel:AddRow()
-		local row = new("Frame", {
-			Size = UDim2.new(1, 0, 0, 32),
-			BackgroundTransparency = 1,
-			LayoutOrder = nextOrder(),
-			ZIndex = 4,
-			Parent = body,
-		}, {
-			new("UIListLayout", {
-				FillDirection = Enum.FillDirection.Horizontal,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder,
-			}),
-		})
-		local rowApi = {}
-		local rord = 0
-		function rowApi:AddButton(o)
-			o = o or {}
-			rord += 1
-			local b = new("TextButton", {
-				Size = UDim2.fromOffset(0, 28),
-				AutomaticSize = Enum.AutomaticSize.X,
-				BackgroundColor3 = o.Color or THEME.Switch,
-				BackgroundTransparency = 0.12,
-				Text = o.Name or "Button",
-				Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.Text,
-				AutoButtonColor = true, LayoutOrder = rord, ZIndex = 5, Parent = row,
-			}, { corner(7), pad(0, 14, 0, 14) })
-			b.Activated:Connect(function() playSound(SOUND_CLICK, 0.3) fire(o.Callback) end)
-			local ba = {}
-			function ba:SetText(t) b.Text = tostring(t) end
-			return ba
-		end
-		return rowApi
-	end
-
-	function panel:AddButton(o)
-		local row = self:AddRow()
-		return row:AddButton(o)
-	end
-
-	-- Grid of equal-width buttons, `cols` per row (e.g. 2 for a 2x2). Rows grow
-	-- automatically as buttons are added.
-	function panel:AddGrid(cols)
-		cols = math.max(1, cols or 2)
-		local wrap = new("Frame", {
-			Size = UDim2.new(1, 0, 0, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundTransparency = 1,
-			LayoutOrder = nextOrder(),
-			ZIndex = 4,
-			Parent = body,
-		}, {
-			new("UIGridLayout", {
-				CellSize = UDim2.new(1 / cols, -5, 0, 30),
-				CellPadding = UDim2.fromOffset(6, 6),
-				FillDirectionMaxCells = cols,
-				SortOrder = Enum.SortOrder.LayoutOrder,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			}),
-		})
-		local gridApi = {}
-		local gord = 0
-		function gridApi:AddButton(o)
-			o = o or {}
-			gord += 1
-			local b = new("TextButton", {
-				BackgroundColor3 = o.Color or THEME.Switch,
-				BackgroundTransparency = 0.12,
-				Text = o.Name or "Button",
-				Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.Text,
-				AutoButtonColor = true, LayoutOrder = gord, ZIndex = 5, Parent = wrap,
-			}, { corner(7) })
-			b.Activated:Connect(function() playSound(SOUND_CLICK, 0.3) fire(o.Callback) end)
-			local ba = {}
-			function ba:SetText(t) b.Text = tostring(t) end
-			return ba
-		end
-		return gridApi
-	end
-
-	self:OnDestroy(function() panel:Destroy() end)
-	return panel
 end
 
 Library.Icons = ICONS
