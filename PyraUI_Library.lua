@@ -6081,16 +6081,8 @@ function Tab:AddPlayerSearch(opts)
 		end
 		row.MouseEnter:Connect(function() tween(row, 0.12, { BackgroundTransparency = 0.9 }) end)
 		row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = 1 }) end)
-		row.InputBegan:Connect(function(input)
-			if isPress(input) then
-				slot.pressed = slot.player
-				slot.pressedAt = os.clock()
-			end
-		end)
 		row.Activated:Connect(function()
 			local p = slot.player
-			if slot.pressed and slot.pressedAt and os.clock() - slot.pressedAt < 3 then p = slot.pressed end
-			slot.pressed = nil
 			if not p or not p.Parent then return end
 			selecting = true
 			box.Text = p.DisplayName
