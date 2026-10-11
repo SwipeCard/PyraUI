@@ -4985,12 +4985,14 @@ function Library.BuildSubMarker(frame, height, opts)
 			BorderSizePixel = 0, ZIndex = 4, Parent = frame,
 		}, { corner(1) })
 	end
-	bar(22, -reach, 2, mid + 1 + reach)
+	local bars = {}
+	bars[1] = bar(22, -reach, 2, mid + 1 + reach)
 	if rightInset then
-		bar(22, mid - 1, UDim2.new(1, -(22 + rightInset), 0, 2))
+		bars[2] = bar(22, mid - 1, UDim2.new(1, -(22 + rightInset), 0, 2))
 	else
-		bar(22, mid - 1, 150, 2)
+		bars[2] = bar(22, mid - 1, 150, 2)
 	end
+	return bars
 end
 
 function Tab:AddColorPicker(opts)
@@ -5002,6 +5004,7 @@ function Tab:AddColorPicker(opts)
 	local frame = elementFrame(self, HEADER)
 	frame.ClipsDescendants = true
 	local clipper = frame
+	local subBars
 	if opts.Sub then
 		frame.ClipsDescendants = false
 		clipper = new("Frame", {
@@ -5012,7 +5015,7 @@ function Tab:AddColorPicker(opts)
 		for _, sample in ipairs({ "#000000", "#BBBBBB", "#DDDDDD", "#FFFFFF" }) do
 			hexW = math.max(hexW, Library.MeasureText(sample, 12, FONT_MEDIUM))
 		end
-		Library.BuildSubMarker(frame, HEADER, { RightInset = 54 + hexW + 8 })
+		subBars = Library.BuildSubMarker(frame, HEADER, { RightInset = 54 + hexW + 8 })
 	else
 		label({
 			Text = opts.Name or "Color", Font = FONT_MEDIUM, TextSize = 13,
@@ -5101,6 +5104,9 @@ function Tab:AddColorPicker(opts)
 		svCursor.Position = UDim2.fromScale(s, 1 - v)
 		hueCursor.Position = UDim2.fromScale(0.5, h)
 		tween(swatch, 0.15, { BackgroundColor3 = color })
+		if subBars then
+			for _, b in ipairs(subBars) do tween(b, 0.15, { BackgroundColor3 = color }) end
+		end
 		hexLabel.Text = "#" .. string.upper(color:ToHex())
 		if notify then fire(opts.Callback, color) end
 	end
@@ -5154,6 +5160,9 @@ function Tab:AddColorPicker(opts)
 
 	header.Activated:Connect(function() api:SetOpen(not isOpen) end)
 	swatch.BackgroundColor3 = Color3.fromHSV(h, s, v)
+	if subBars then
+		for _, b in ipairs(subBars) do b.BackgroundColor3 = Color3.fromHSV(h, s, v) end
+	end
 	render(false)
 	self.Window:_registerFlag(opts.Flag, api, "color")
 	return api
@@ -5983,6 +5992,8 @@ function Tab:AddPlayerSearch(opts)
 	local win = self.Window
 	local GuiService = game:GetService("GuiService")
 	local hoverRow
+	local lastMouse
+	local moveConn
 
 	local function paintHover(row)
 		if hoverRow == row then return end
@@ -5997,10 +6008,15 @@ function Tab:AddPlayerSearch(opts)
 			paintHover(nil)
 			return
 		end
-		local m = UserInputService:GetMouseLocation()
-		local sg = listHolder:FindFirstAncestorOfClass("ScreenGui")
-		local inset = (sg and sg.IgnoreGuiInset) and Vector2.zero or GuiService:GetGuiInset()
-		local x, y = m.X - inset.X, m.Y - inset.Y
+		local x, y
+		if lastMouse then
+			x, y = lastMouse.X, lastMouse.Y
+		else
+			local m = UserInputService:GetMouseLocation()
+			local sg = listHolder:FindFirstAncestorOfClass("ScreenGui")
+			local inset = (sg and sg.IgnoreGuiInset) and Vector2.zero or GuiService:GetGuiInset()
+			x, y = m.X - inset.X, m.Y - inset.Y
+		end
 		local fp, fs = frame.AbsolutePosition, frame.AbsoluteSize
 		local found
 		if x >= fp.X and x <= fp.X + fs.X and y >= fp.Y and y <= fp.Y + fs.Y then
@@ -6144,8 +6160,7 @@ function Tab:AddPlayerSearch(opts)
 				end
 			end
 		end
-		local busy = hovered
-			or (os.clock() - lastPress) < 0.4
+		local busy = (os.clock() - lastPress) < 0.4
 			or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
 		if needRebuild then
 			if busy then return end
@@ -6167,7 +6182,10 @@ function Tab:AddPlayerSearch(opts)
 				tween(rm.status, 0.2, { TextColor3 = e.color or THEME.SubText })
 			end
 		end
-		if moved then task.delay(0.05, syncHover) end
+		if moved then
+			task.defer(syncHover)
+			task.delay(0.05, syncHover)
+		end
 	end
 	local function startLive()
 		liveId += 1
@@ -6187,12 +6205,24 @@ function Tab:AddPlayerSearch(opts)
 		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER + listH) }, Enum.EasingStyle.Quint)
 		tween(boxStroke, 0.2, { Transparency = 0.4 })
 		playSound(SOUND_CLICK, 0.2, 1.05)
+		if moveConn then moveConn:Disconnect() end
+		moveConn = UserInputService.InputChanged:Connect(function(input)
+			if win.Destroyed then
+				moveConn:Disconnect()
+				return
+			end
+			if input.UserInputType == Enum.UserInputType.MouseMovement then
+				lastMouse = Vector2.new(input.Position.X, input.Position.Y)
+			end
+		end)
 		startLive()
 	end
 	function api:Close()
 		if not open then return end
 		open = false
 		liveId += 1
+		if moveConn then moveConn:Disconnect() moveConn = nil end
+		paintHover(nil)
 		if box:IsFocused() then box:ReleaseFocus() end
 		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER) }, Enum.EasingStyle.Quint)
 		tween(boxStroke, 0.2, { Transparency = 0.88 })
