@@ -5125,6 +5125,7 @@ function Tab:AddColorPicker(opts)
 		Parent = hue,
 	}, { round(), stroke(Color3.new(0, 0, 0), 0.5) })
 
+	local sizeTween
 	local function fadeBody(show, dur)
 		tween(body, dur or 0.1, { GroupTransparency = show and 0 or 1 })
 	end
@@ -5179,20 +5180,12 @@ function Tab:AddColorPicker(opts)
 			body.GroupTransparency = 1
 			fadeBody(true, 0.22)
 		end
-		local function run()
-			if id ~= openId then return end
-			tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, isOpen and (HEADER + BODY) or HEADER) }).Completed:Connect(function()
-				if id == openId and not isOpen then settle() end
-			end)
-		end
 		if state then
-			run()
+			sizeTween = tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER + BODY) })
 		else
-			fadeBody(false, 0.1)
-			task.delay(0.1, run)
-			task.delay(0.55, function()
-				if id == openId and not isOpen then settle() end
-			end)
+			if sizeTween then sizeTween:Cancel() sizeTween = nil end
+			body.GroupTransparency = 1
+			settle()
 		end
 	end
 	function api:Set(color)
