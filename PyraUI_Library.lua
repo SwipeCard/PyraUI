@@ -4388,9 +4388,30 @@ function Tab:AddToggle(opts)
 		chip.Activated:Connect(function() chipApi:Set(not chipState) end)
 		api.Chip = chipApi
 
+		local dot
+		if opts.Indicator and not inlineRow then
+			dot = new("Frame", {
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, chipX - chipW - 8, 0.5, 0),
+				Size = UDim2.fromOffset(8, 8),
+				BackgroundColor3 = STATUS_GREEN,
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				ZIndex = 7,
+				Parent = frame,
+			}, { round() })
+			api.Indicator = {
+				Set = function(_, on)
+					tween(dot, 0.15, { BackgroundTransparency = on and 0 or 1 })
+				end,
+			}
+		end
+
 		if hasKey and keyChipRef and not inlineRow then
 			local function reposition()
-				chip.Position = UDim2.new(1, -60 - keyChipRef.AbsoluteSize.X - 6, 0.5, 0)
+				local x = -60 - keyChipRef.AbsoluteSize.X - 6
+				chip.Position = UDim2.new(1, x, 0.5, 0)
+				if dot then dot.Position = UDim2.new(1, x - chipW - 8, 0.5, 0) end
 			end
 			keyChipRef:GetPropertyChangedSignal("AbsoluteSize"):Connect(reposition)
 			task.defer(reposition)
