@@ -2205,12 +2205,12 @@ function Library:CreateSidePanel(opts)
 	if not opts.Editor then
 		nameLbl = label({
 			Text = "Display Name", Font = FONT_BOLD, TextSize = 14, TextColor3 = THEME.Text,
-			Position = UDim2.fromOffset(66, 15), Size = UDim2.new(1, -66, 0, 18),
+			Position = UDim2.fromOffset(66, 8), Size = UDim2.new(1, -66, 0, 18),
 			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = avatarWrap,
 		})
 		userLbl = label({
 			Text = "@Username", Font = FONT_MEDIUM, TextSize = 11, TextColor3 = THEME.SubText,
-			Position = UDim2.fromOffset(66, 33), Size = UDim2.new(1, -66, 0, 14),
+			Position = UDim2.fromOffset(66, 27), Size = UDim2.new(1, -66, 0, 14),
 			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = avatarWrap,
 		})
 	end
@@ -2228,6 +2228,7 @@ function Library:CreateSidePanel(opts)
 		return (t and t.Accent) or THEME.Accent
 	end
 
+	local rightReserve = 0
 	function panel:AddAvatarButton(o)
 		if opts.Editor then return nil end
 		o = o or {}
@@ -2242,10 +2243,9 @@ function Library:CreateSidePanel(opts)
 		elseif o.Corner == "BottomRight" then
 			hit = math.max(24, iconSize + 4)
 			anchor = Vector2.new(1, 1)
-			position = UDim2.new(1, -(10 + ((o.Index or 1) - 1) * hit), 1, -6)
-			host = root
-			local bodyPad = body:FindFirstChildOfClass("UIPadding")
-			if bodyPad then bodyPad.PaddingBottom = UDim.new(0, 42) end
+			position = UDim2.new(1, 2 - ((o.Index or 1) - 1) * hit, 0, 60)
+			rightReserve = math.max(rightReserve, (o.Index or 1) * hit + 8)
+			if userLbl then userLbl.Size = UDim2.new(1, -(66 + rightReserve), 0, 14) end
 		else
 			local sideSign = o.Side == "Right" and 1 or -1
 			local offsetX = o.Slot and (50 + (o.Slot - 1) * 32) or 66
