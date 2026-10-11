@@ -4022,6 +4022,9 @@ function Tab:AddToggle(opts)
 
 	local chipInline = hasChip and opts.ChipInline == true
 	if chipInline then inset = hasKey and 110 or 70 end
+	local noSwitch = opts.NoSwitch == true
+	local rightPad = noSwitch and 12 or 60
+	if noSwitch then inset = math.max(inset - 48, 50) end
 	local inlineRow
 	local iconToggle = opts.IconToggle == true and type(opts.Icon) == "string" and opts.Icon ~= ""
 	if sliderOpts then
@@ -4091,7 +4094,10 @@ function Tab:AddToggle(opts)
 	local switch, knob
 	local checkbox, checkMark
 	local isCheckbox = opts.Checkbox == true and not iconToggle and not sliderOpts
-	if iconToggle then
+	if noSwitch then
+		iconToggle = false
+		isCheckbox = false
+	elseif iconToggle then
 
 		bigIcon = new("ImageLabel", {
 			AnchorPoint = Vector2.new(1, 0.5),
@@ -4158,6 +4164,7 @@ function Tab:AddToggle(opts)
 	local iconBase = opts.Icon
 	local iconSel = opts.IconSelected
 	local function render(instant)
+		if noSwitch then return end
 		local t = instant and 0 or 0.28
 		local info = TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 		if iconToggle then
@@ -4211,7 +4218,9 @@ function Tab:AddToggle(opts)
 		if type(fn) == "function" then table.insert(changedListeners, fn) end
 	end
 
-	hit.Activated:Connect(function() api:Set(not state) end)
+	if not noSwitch then
+		hit.Activated:Connect(function() api:Set(not state) end)
+	end
 
 	if sliderOpts then
 		local smin, smax = sliderOpts.Min or 0, sliderOpts.Max or 100
@@ -4311,7 +4320,7 @@ function Tab:AddToggle(opts)
 		local listening = false
 		local chip = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -60, 0.5, 0),
+			Position = UDim2.new(1, -rightPad, 0.5, 0),
 			Size = UDim2.fromOffset(0, 20),
 			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundColor3 = THEME.Card,
@@ -4351,7 +4360,7 @@ function Tab:AddToggle(opts)
 	if hasChip then
 		local chipState = opts.ChipDefault == true
 		local chipW = type(opts.Chip) == "string" and (#opts.Chip > 3) and (18 + #opts.Chip * 6) or 42
-		local chipX = hasKey and -60 or -60
+		local chipX = -rightPad
 		local chipProps = {
 			Size = UDim2.fromOffset(chipW, 20),
 			BackgroundColor3 = chipState and self.Accent or THEME.Switch,
@@ -4409,7 +4418,7 @@ function Tab:AddToggle(opts)
 
 		if hasKey and keyChipRef and not inlineRow then
 			local function reposition()
-				local x = -60 - keyChipRef.AbsoluteSize.X - 6
+				local x = -rightPad - keyChipRef.AbsoluteSize.X - 6
 				chip.Position = UDim2.new(1, x, 0.5, 0)
 				if dot then dot.Position = UDim2.new(1, x - chipW - 8, 0.5, 0) end
 			end
