@@ -4975,7 +4975,7 @@ end
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
 	local mid = height / 2
-	local reach = opts.Reach or 3
+	local reach = opts.Reach or 1
 	local rightInset = opts.RightInset
 	local function bar(x, y, w, h)
 		return new("Frame", {
