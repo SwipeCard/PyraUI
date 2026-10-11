@@ -5976,8 +5976,6 @@ function Tab:AddPlayerSearch(opts)
 
 	local open = false
 	local selecting = false
-	local hovered = false
-	local lastPress = 0
 	local gapClick = false
 	local api = {}
 
@@ -5987,51 +5985,13 @@ function Tab:AddPlayerSearch(opts)
 		task.delay(0.3, function() gapClick = false end)
 	end)
 
-	local rowMap = {}
 	local liveId = 0
 	local win = self.Window
-	local GuiService = game:GetService("GuiService")
-	local hoverRow
-	local lastMouse
-	local moveConn
-
-	local function paintHover(row)
-		if hoverRow == row then return end
-		if hoverRow and hoverRow.Parent then tween(hoverRow, 0.12, { BackgroundTransparency = 1 }) end
-		hoverRow = row
-		hovered = row ~= nil
-		if row then tween(row, 0.12, { BackgroundTransparency = 0.9 }) end
-	end
-
-	local function syncHover()
-		if not open or not UserInputService.MouseEnabled then
-			paintHover(nil)
-			return
-		end
-		local x, y
-		if lastMouse then
-			x, y = lastMouse.X, lastMouse.Y
-		else
-			local m = UserInputService:GetMouseLocation()
-			local sg = listHolder:FindFirstAncestorOfClass("ScreenGui")
-			local inset = (sg and sg.IgnoreGuiInset) and Vector2.zero or GuiService:GetGuiInset()
-			x, y = m.X - inset.X, m.Y - inset.Y
-		end
-		local fp, fs = frame.AbsolutePosition, frame.AbsoluteSize
-		local found
-		if x >= fp.X and x <= fp.X + fs.X and y >= fp.Y and y <= fp.Y + fs.Y then
-			for _, c in ipairs(listHolder:GetChildren()) do
-				if c:IsA("TextButton") then
-					local pos, size = c.AbsolutePosition, c.AbsoluteSize
-					if x >= pos.X and x <= pos.X + size.X and y >= pos.Y and y <= pos.Y + size.Y then
-						found = c
-						break
-					end
-				end
-			end
-		end
-		paintHover(found)
-	end
+	local slots = {}
+	local thumbCache = {}
+	local lastListH = -1
+	local hasStatus = type(opts.RowInfo) == "function"
+	local statusW = hasStatus and 80 or 0
 
 	local function normalize(q)
 		return (q or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
@@ -6046,7 +6006,7 @@ function Tab:AddPlayerSearch(opts)
 				local hitDisp = p.DisplayName:lower():find(query, 1, true)
 				if query == "" or hitName or hitDisp then
 					local statusText, statusColor, rank
-					if type(opts.RowInfo) == "function" then
+					if hasStatus then
 						local ok, t, c, r = pcall(opts.RowInfo, p)
 						if ok then statusText, statusColor, rank = t, c, r end
 					end
@@ -6062,131 +6022,133 @@ function Tab:AddPlayerSearch(opts)
 		return entries
 	end
 
-	local function rebuild(query)
-		for _, c in ipairs(listHolder:GetChildren()) do
-			if c:IsA("TextButton") then c:Destroy() end
+	local function loadThumb(slot, p)
+		local cached = thumbCache[p.UserId]
+		if cached then
+			slot.pfp.Image = cached
+			return
 		end
-		rowMap = {}
-		hoverRow = nil
-		hovered = false
-		local entries = collect(normalize(query))
-		local shown = 0
-		for _, entry in ipairs(entries) do
-			if shown >= 20 then break end
-			local p = entry.p
-			shown += 1
-			local statusW = entry.text and 80 or 0
-			local row = new("TextButton", {
-				Size = UDim2.new(1, 0, 0, ROW_H),
-				BackgroundColor3 = THEME.Card,
-				BackgroundTransparency = 1,
-				AutoButtonColor = false,
-				Text = "",
-				LayoutOrder = shown,
-				ZIndex = 6,
-				Parent = listHolder,
-			}, { corner(7), stroke(Color3.new(1, 1, 1), 0.88) })
-			local pfp = new("ImageLabel", {
-				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.new(0, 6, 0.5, 0),
-				Size = UDim2.fromOffset(28, 28),
-				BackgroundColor3 = THEME.Switch,
-				ZIndex = 7,
-				Parent = row,
-			}, { round(), stroke(Color3.new(1, 1, 1), 0.85) })
-			task.spawn(function()
-				local ok, img = pcall(function()
-					return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
-				end)
-				if ok and pfp.Parent then pfp.Image = img end
+		slot.pfp.Image = ""
+		task.spawn(function()
+			local ok, img = pcall(function()
+				return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
 			end)
-			label({
-				Text = p.DisplayName, Font = FONT_MEDIUM, TextSize = 13, TextColor3 = THEME.Text,
-				Position = UDim2.fromOffset(42, 5), Size = UDim2.new(1, -(52 + statusW), 0, 16),
-				TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
-			})
-			label({
-				Text = "@" .. p.Name, TextSize = 11, TextColor3 = THEME.SubText,
-				Position = UDim2.fromOffset(42, 21), Size = UDim2.new(1, -(52 + statusW), 0, 13),
-				TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
-			})
-			local statusLabel
-			if entry.text then
-				statusLabel = label({
-					Text = entry.text, Font = FONT_BOLD, TextSize = 11, TextColor3 = entry.color or THEME.SubText,
-					AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
-					Size = UDim2.fromOffset(70, 16), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 7, Parent = row,
-				})
+			if ok and img then
+				thumbCache[p.UserId] = img
+				if slot.player == p and slot.pfp.Parent then slot.pfp.Image = img end
 			end
-			rowMap[p] = { row = row, status = statusLabel, text = entry.text, color = entry.color }
-			row.MouseEnter:Connect(function() paintHover(row) end)
-			row.MouseLeave:Connect(function()
-				if hoverRow == row then paintHover(nil) end
-			end)
-			row.InputBegan:Connect(function(input)
-				if isPress(input) then lastPress = os.clock() end
-			end)
-			row.Activated:Connect(function()
-				selecting = true
-				box.Text = p.DisplayName
-				selecting = false
-				fire(opts.Callback, p)
-				api:Close()
-			end)
-		end
+		end)
+	end
 
-		local listH = shown > 0 and (shown * (ROW_H + 4) + 10) or 0
-		listHolder.Size = UDim2.new(1, -20, 0, math.max(listH, 0))
-		task.delay(0.05, syncHover)
+	local function makeSlot(index)
+		local slot = {}
+		local row = new("TextButton", {
+			Size = UDim2.new(1, 0, 0, ROW_H),
+			BackgroundColor3 = THEME.Card,
+			BackgroundTransparency = 1,
+			AutoButtonColor = false,
+			Text = "",
+			LayoutOrder = index,
+			ZIndex = 6,
+			Parent = listHolder,
+		}, { corner(7), stroke(Color3.new(1, 1, 1), 0.88) })
+		slot.row = row
+		slot.pfp = new("ImageLabel", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 6, 0.5, 0),
+			Size = UDim2.fromOffset(28, 28),
+			BackgroundColor3 = THEME.Switch,
+			ZIndex = 7,
+			Parent = row,
+		}, { round(), stroke(Color3.new(1, 1, 1), 0.85) })
+		slot.nameLbl = label({
+			Text = "", Font = FONT_MEDIUM, TextSize = 13, TextColor3 = THEME.Text,
+			Position = UDim2.fromOffset(42, 5), Size = UDim2.new(1, -(52 + statusW), 0, 16),
+			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
+		})
+		slot.userLbl = label({
+			Text = "", TextSize = 11, TextColor3 = THEME.SubText,
+			Position = UDim2.fromOffset(42, 21), Size = UDim2.new(1, -(52 + statusW), 0, 13),
+			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
+		})
+		if hasStatus then
+			slot.status = label({
+				Text = "", Font = FONT_BOLD, TextSize = 11, TextColor3 = THEME.SubText,
+				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
+				Size = UDim2.fromOffset(70, 16), TextXAlignment = Enum.TextXAlignment.Right,
+				Visible = false, ZIndex = 7, Parent = row,
+			})
+		end
+		row.MouseEnter:Connect(function() tween(row, 0.12, { BackgroundTransparency = 0.9 }) end)
+		row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = 1 }) end)
+		row.InputBegan:Connect(function(input)
+			if isPress(input) then
+				slot.pressed = slot.player
+				slot.pressedAt = os.clock()
+			end
+		end)
+		row.Activated:Connect(function()
+			local p = slot.player
+			if slot.pressed and slot.pressedAt and os.clock() - slot.pressedAt < 3 then p = slot.pressed end
+			slot.pressed = nil
+			if not p or not p.Parent then return end
+			selecting = true
+			box.Text = p.DisplayName
+			selecting = false
+			fire(opts.Callback, p)
+			api:Close()
+		end)
+		slots[index] = slot
+		return slot
+	end
+
+	local function assign(slot, entry)
+		local p = entry.p
+		if slot.player ~= p then
+			slot.player = p
+			loadThumb(slot, p)
+		end
+		if slot.nameLbl.Text ~= p.DisplayName then slot.nameLbl.Text = p.DisplayName end
+		local uname = "@" .. p.Name
+		if slot.userLbl.Text ~= uname then slot.userLbl.Text = uname end
+		if slot.status then
+			if entry.text then
+				slot.status.Visible = true
+				if slot.status.Text ~= entry.text then slot.status.Text = entry.text end
+				if slot.statusColor ~= entry.color then
+					slot.statusColor = entry.color
+					tween(slot.status, 0.2, { TextColor3 = entry.color or THEME.SubText })
+				end
+			else
+				slot.status.Visible = false
+			end
+		end
+	end
+
+	local function sync(query)
+		local entries = collect(normalize(query))
+		local count = math.min(#entries, 20)
+		for i = #slots + 1, count do makeSlot(i) end
+		for i = #slots, count + 1, -1 do
+			slots[i].row:Destroy()
+			slots[i] = nil
+		end
+		for i = 1, count do assign(slots[i], entries[i]) end
+		local listH = count > 0 and (count * (ROW_H + 4) + 10) or 0
+		listHolder.Size = UDim2.new(1, -20, 0, listH)
 		return listH
 	end
+	local rebuild = sync
 
 	local function refreshLive()
 		if not open or selecting then return end
-		syncHover()
-		local entries = collect(normalize(box.Text))
-		local count = math.min(#entries, 20)
-		local needRebuild = false
-		local tracked = 0
-		for _ in pairs(rowMap) do tracked += 1 end
-		if tracked ~= count then needRebuild = true end
-		if not needRebuild then
-			for i = 1, count do
-				local e = entries[i]
-				local rm = rowMap[e.p]
-				if not rm or not rm.row.Parent or (rm.status ~= nil) ~= (e.text ~= nil) then
-					needRebuild = true
-					break
-				end
-			end
-		end
-		local busy = (os.clock() - lastPress) < 0.4
-			or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-		if needRebuild then
-			if busy then return end
-			local listH = rebuild(box.Text)
+		local listH = sync(box.Text)
+		if listH ~= lastListH then
+			lastListH = listH
 			tween(frame, 0.2, { Size = UDim2.new(1, 0, 0, HEADER + listH) })
-			return
-		end
-		local moved = false
-		for i = 1, count do
-			local e = entries[i]
-			local rm = rowMap[e.p]
-			if not busy and rm.row.LayoutOrder ~= i then
-				rm.row.LayoutOrder = i
-				moved = true
-			end
-			if rm.status and (rm.text ~= e.text or rm.color ~= e.color) then
-				rm.text, rm.color = e.text, e.color
-				rm.status.Text = e.text
-				tween(rm.status, 0.2, { TextColor3 = e.color or THEME.SubText })
-			end
-		end
-		if moved then
-			task.defer(syncHover)
-			task.delay(0.05, syncHover)
 		end
 	end
+
 	local function startLive()
 		liveId += 1
 		local id = liveId
@@ -6202,27 +6164,16 @@ function Tab:AddPlayerSearch(opts)
 		if open then return end
 		open = true
 		local listH = rebuild(box.Text)
+		lastListH = listH
 		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER + listH) }, Enum.EasingStyle.Quint)
 		tween(boxStroke, 0.2, { Transparency = 0.4 })
 		playSound(SOUND_CLICK, 0.2, 1.05)
-		if moveConn then moveConn:Disconnect() end
-		moveConn = UserInputService.InputChanged:Connect(function(input)
-			if win.Destroyed then
-				moveConn:Disconnect()
-				return
-			end
-			if input.UserInputType == Enum.UserInputType.MouseMovement then
-				lastMouse = Vector2.new(input.Position.X, input.Position.Y)
-			end
-		end)
 		startLive()
 	end
 	function api:Close()
 		if not open then return end
 		open = false
 		liveId += 1
-		if moveConn then moveConn:Disconnect() moveConn = nil end
-		paintHover(nil)
 		if box:IsFocused() then box:ReleaseFocus() end
 		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER) }, Enum.EasingStyle.Quint)
 		tween(boxStroke, 0.2, { Transparency = 0.88 })
@@ -6270,6 +6221,7 @@ function Tab:AddPlayerSearch(opts)
 	box:GetPropertyChangedSignal("Text"):Connect(function()
 		if open and not selecting then
 			local listH = rebuild(box.Text)
+			lastListH = listH
 			tween(frame, 0.15, { Size = UDim2.new(1, 0, 0, HEADER + listH) })
 		end
 	end)
