@@ -2183,7 +2183,7 @@ function Library:CreateSidePanel(opts)
 
 	local DEFAULT_AVATAR = "rbxthumb://type=AvatarHeadShot&id=1&w=150&h=150"
 	local avatar = new("ImageLabel", {
-		Size = UDim2.fromOffset(64, 64),
+		Size = UDim2.fromOffset(54, 54),
 		BackgroundColor3 = THEME.Switch,
 		Image = DEFAULT_AVATAR,
 		LayoutOrder = 0,
@@ -2191,7 +2191,7 @@ function Library:CreateSidePanel(opts)
 		Parent = body,
 	}, { round(), stroke(Color3.new(1, 1, 1), 0.85) })
 	local avatarWrap = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 72),
+		Size = UDim2.new(1, 0, 0, 62),
 		BackgroundTransparency = 1,
 		LayoutOrder = 0,
 		ZIndex = 4,
@@ -2204,13 +2204,13 @@ function Library:CreateSidePanel(opts)
 	local nameLbl, userLbl
 	if not opts.Editor then
 		nameLbl = label({
-			Text = "@Username", Font = FONT_BOLD, TextSize = 14, TextColor3 = THEME.Text,
-			Position = UDim2.fromOffset(76, 6), Size = UDim2.new(1, -76, 0, 18),
+			Text = "Display Name", Font = FONT_BOLD, TextSize = 14, TextColor3 = THEME.Text,
+			Position = UDim2.fromOffset(66, 15), Size = UDim2.new(1, -66, 0, 18),
 			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = avatarWrap,
 		})
 		userLbl = label({
-			Text = "", Font = FONT_MEDIUM, TextSize = 11, TextColor3 = THEME.SubText,
-			Position = UDim2.fromOffset(76, 24), Size = UDim2.new(1, -76, 0, 14),
+			Text = "@Username", Font = FONT_MEDIUM, TextSize = 11, TextColor3 = THEME.SubText,
+			Position = UDim2.fromOffset(66, 33), Size = UDim2.new(1, -66, 0, 14),
 			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = avatarWrap,
 		})
 	end
@@ -2238,7 +2238,7 @@ function Library:CreateSidePanel(opts)
 		if o.Corner == "BottomLeft" then
 			hit = math.max(24, iconSize + 4)
 			anchor = Vector2.new(0, 1)
-			position = UDim2.fromOffset(74 + ((o.Index or 1) - 1) * hit, 70)
+			position = UDim2.fromOffset(64 + ((o.Index or 1) - 1) * hit, 60)
 		elseif o.Corner == "BottomRight" then
 			hit = math.max(24, iconSize + 4)
 			anchor = Vector2.new(1, 1)
@@ -2301,7 +2301,7 @@ function Library:CreateSidePanel(opts)
 		if clearBtn or opts.Editor then return end
 		clearBtn = new("TextButton", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(60, 8),
+			Position = UDim2.fromOffset(50, 8),
 			Size = UDim2.fromOffset(22, 22),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
@@ -2380,7 +2380,7 @@ function Library:CreateSidePanel(opts)
 	end
 	function panel:SetStat(key, value, color)
 		if key == "Username" and userLbl then
-			userLbl.Text = (value == nil or value == "-") and "" or tostring(value)
+			userLbl.Text = (value == nil or value == "-") and "@Username" or tostring(value)
 			return
 		end
 		if not rows[key] then addStat(key) end
@@ -6122,6 +6122,11 @@ function Tab:AddPlayerSearch(opts)
 		end
 		row.MouseEnter:Connect(function() tween(row, 0.12, { BackgroundTransparency = 0.9 }) end)
 		row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = 1 }) end)
+		row.InputBegan:Connect(function(input)
+			if not isPress(input) then return end
+			gapClick = true
+			task.delay(0.4, function() gapClick = false end)
+		end)
 		row.Activated:Connect(function()
 			local p = slot.player
 			if not p or not p.Parent then
