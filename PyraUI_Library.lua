@@ -2243,7 +2243,7 @@ function Library:CreateSidePanel(opts)
 		elseif o.Corner == "BottomRight" then
 			hit = math.max(24, iconSize + 4)
 			anchor = Vector2.new(1, 1)
-			position = UDim2.new(1, 2 - ((o.Index or 1) - 1) * hit, 0, 60)
+			position = UDim2.new(1, 8 - ((o.Index or 1) - 1) * hit, 0, 60)
 			rightReserve = math.max(rightReserve, (o.Index or 1) * hit + 8)
 			if userLbl then userLbl.Size = UDim2.new(1, -(66 + rightReserve), 0, 14) end
 		else
@@ -5124,6 +5124,15 @@ function Tab:AddColorPicker(opts)
 		Parent = hue,
 	}, { round(), stroke(Color3.new(0, 0, 0), 0.5) })
 
+	local svStroke = svCursor:FindFirstChildOfClass("UIStroke")
+	local hueStroke = hueCursor:FindFirstChildOfClass("UIStroke")
+	local function fadeCursors(show)
+		local dur = 0.1
+		if svStroke then tween(svStroke, dur, { Transparency = show and 0 or 1 }) end
+		tween(hueCursor, dur, { BackgroundTransparency = show and 0 or 1 })
+		if hueStroke then tween(hueStroke, dur, { Transparency = show and 0.5 or 1 }) end
+	end
+
 	local api = {}
 	local function render(notify)
 		local color = Color3.fromHSV(h, s, v)
@@ -5169,12 +5178,22 @@ function Tab:AddColorPicker(opts)
 		openId += 1
 		local id = openId
 		playSound(SOUND_CLICK, 0.22, state and 1.05 or 0.95)
-		if state then body.Visible = true end
-		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, isOpen and (HEADER + BODY) or HEADER) }).Completed:Connect(function()
-			if id == openId and not isOpen then settle() end
-		end)
-		if not state then
-			task.delay(0.4, function()
+		if state then
+			body.Visible = true
+			fadeCursors(true)
+		end
+		local function run()
+			if id ~= openId then return end
+			tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, isOpen and (HEADER + BODY) or HEADER) }).Completed:Connect(function()
+				if id == openId and not isOpen then settle() end
+			end)
+		end
+		if state then
+			run()
+		else
+			fadeCursors(false)
+			task.delay(0.1, run)
+			task.delay(0.55, function()
 				if id == openId and not isOpen then settle() end
 			end)
 		end
