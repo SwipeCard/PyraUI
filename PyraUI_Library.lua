@@ -957,7 +957,7 @@ function Library.new(config)
 
 	local avatar = new("ImageLabel", {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 12, 0.5, 0),
+		Position = UDim2.new(0, 12, 0, 24),
 		Size = UDim2.fromOffset(30, 30),
 		BackgroundColor3 = THEME.Switch,
 		ZIndex = 3,
@@ -983,17 +983,18 @@ function Library.new(config)
 		end)
 		if ok then avatar.Image = image end
 	end)
-	label({
+	local nameLabel = label({
 		Text = player.DisplayName, Font = FONT_BOLD, TextSize = 13,
-		Position = UDim2.new(0, 50, 0.5, -15), Size = UDim2.fromOffset(0, 16),
-		AutomaticSize = Enum.AutomaticSize.X, ZIndex = 3, Parent = self.Footer,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.new(0, 50, 0, 9), Size = UDim2.fromOffset(150, 16),
+		ZIndex = 3, Parent = self.Footer,
 	})
 	local useDiamond = type(ICONS.Diamond) == "string" and ICONS.Diamond ~= ""
 	local diamond
 	if useDiamond then
 		diamond = new("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0, 58, 0.5, 9),
+			Position = UDim2.new(0, 58, 0, 33),
 			Size = UDim2.fromOffset(16, 16),
 			BackgroundTransparency = 1,
 			Image = ICONS.Diamond,
@@ -1010,7 +1011,7 @@ function Library.new(config)
 	else
 		diamond = new("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0, 54, 0.5, 9),
+			Position = UDim2.new(0, 54, 0, 33),
 			Size = UDim2.fromOffset(6, 6),
 			Rotation = 45,
 			BackgroundColor3 = THEME.Premium,
@@ -1024,70 +1025,59 @@ function Library.new(config)
 			{ BackgroundTransparency = 0.35 }
 		):Play()
 	end
-	label({
+	local premiumLabel = label({
 		Text = "P R E M I U M", Font = FONT_BOLD, TextSize = 11,
 		TextColor3 = Color3.fromRGB(240, 200, 60),
 		TextTransparency = 0.1,
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 70, 0.5, 9), Size = UDim2.fromOffset(0, 16),
+		Position = UDim2.new(0, 70, 0, 33), Size = UDim2.fromOffset(0, 16),
 		TextYAlignment = Enum.TextYAlignment.Center,
 		AutomaticSize = Enum.AutomaticSize.X, ZIndex = 3, Parent = self.Footer,
 	})
 
-	local stats = new("Frame", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -14, 0.5, 0),
-		Size = UDim2.new(1, -200, 1, -12),
-		BackgroundTransparency = 1,
+	local footerChips = {}
+	local footerRule = new("Frame", {
+		Size = UDim2.fromOffset(WINDOW_W - 24, 1),
+		Position = UDim2.fromOffset(12, 47),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.9,
+		BorderSizePixel = 0,
+		Visible = false,
 		ZIndex = 3,
 		Parent = self.Footer,
-	}, {
-		new("UIListLayout", {
-			FillDirection = Enum.FillDirection.Horizontal,
-			HorizontalAlignment = Enum.HorizontalAlignment.Right,
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, 12),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-		}),
 	})
-	local chipOrder = 0
 	local function chip(caption, value)
-		chipOrder += 1
-		if chipOrder > 1 then
-			new("Frame", {
+		local frame = new("Frame", {
+			Size = UDim2.fromOffset(60, 30),
+			BackgroundTransparency = 1,
+			ZIndex = 3,
+			Parent = self.Footer,
+		})
+		local capLabel = label({
+			Text = caption, Font = FONT_BOLD, TextSize = 9, TextColor3 = THEME.SubText,
+			Position = UDim2.fromOffset(0, 1), Size = UDim2.new(1, 0, 0, 11),
+			ZIndex = 3, Parent = frame,
+		})
+		local valLabel = label({
+			Text = value, Font = FONT_MEDIUM, TextSize = 12, RichText = true,
+			Position = UDim2.fromOffset(0, 13), Size = UDim2.new(1, 0, 0, 15),
+			ZIndex = 3, Parent = frame,
+		})
+		local divider
+		if #footerChips > 0 then
+			divider = new("Frame", {
 				Size = UDim2.fromOffset(1, 22),
 				BackgroundColor3 = Color3.new(1, 1, 1),
 				BackgroundTransparency = 0.88,
 				BorderSizePixel = 0,
-				LayoutOrder = chipOrder * 2 - 1,
+				Visible = false,
 				ZIndex = 3,
-				Parent = stats,
+				Parent = self.Footer,
 			})
 		end
-		local c = new("Frame", {
-			Size = UDim2.new(0, 0, 1, 0),
-			AutomaticSize = Enum.AutomaticSize.X,
-			BackgroundTransparency = 1,
-			LayoutOrder = chipOrder * 2,
-			ZIndex = 3,
-			Parent = stats,
-		}, {
-			new("UIListLayout", {
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				Padding = UDim.new(0, 1),
-				SortOrder = Enum.SortOrder.LayoutOrder,
-			}),
-		})
-		label({
-			Text = caption, Font = FONT_BOLD, TextSize = 9, TextColor3 = THEME.SubText,
-			Size = UDim2.fromOffset(0, 11), AutomaticSize = Enum.AutomaticSize.X,
-			LayoutOrder = 1, ZIndex = 3, Parent = c,
-		})
-		return label({
-			Text = value, Font = FONT_MEDIUM, TextSize = 12, RichText = true,
-			Size = UDim2.fromOffset(0, 15), AutomaticSize = Enum.AutomaticSize.X,
-			LayoutOrder = 2, ZIndex = 3, Parent = c,
-		})
+		table.insert(footerChips, { frame = frame, caption = capLabel, value = valLabel, divider = divider })
+		valLabel:GetPropertyChangedSignal("Text"):Connect(function() self:_scheduleFooterLayout() end)
+		return valLabel
 	end
 
 	self.StatusColor = (typeof(config.StatusColor) == "Color3") and config.StatusColor or STATUS_GREEN
@@ -1098,6 +1088,11 @@ function Library.new(config)
 	local pingValue = chip("PING", "-- ms")
 	local fpsValue = chip("FPS", "--")
 	local sessionValue = chip("SESSION", "00:00:00")
+
+	self.FooterH = FOOTER_H
+	self._footerW = WINDOW_W
+	self._footerInfo = { nameLabel = nameLabel, premiumLabel = premiumLabel, chips = footerChips, rule = footerRule }
+	self:_refreshFooter()
 
 	local sessionStart = os.clock()
 	local frameCount, frameT0 = 0, os.clock()
@@ -1235,6 +1230,8 @@ function Library.new(config)
 		end
 		glassWasOn = glassOn
 
+		self:_applyMonitorParallax(dt)
+
 		if not self.Holder.Visible then return end
 
 		local step = math.min(dt, 1 / 30)
@@ -1309,7 +1306,7 @@ end
 
 function Library:_fitScale()
 	local vp = camera.ViewportSize
-	local h = DOCK_H + GAP + PANEL_H + GAP + FOOTER_H
+	local h = DOCK_H + GAP + PANEL_H + GAP + (self.FooterFullH or FOOTER_H)
 	local fit = math.min((vp.X - 28) / WINDOW_W, (vp.Y - 28) / h, 1)
 	return math.max(fit, 0.45) * self.ScaleMultiplier
 end
@@ -1395,6 +1392,149 @@ function Library:Toggle()
 	if self.Open then self:Hide() else self:Show() end
 end
 
+function Library.MeasureText(text, size, font)
+	local ok, v = pcall(function() return TextService:GetTextSize(text, size, font, Vector2.new(10000, 100)) end)
+	if ok and v then return v.X end
+	return #text * size * 0.56
+end
+
+function Library.ComputeFooterLayout(W, nameW, premiumW, chipWs)
+	local PAD, NAME_X, TOP_H, CHIP_H, CHIP_GAP, ROW_GAP = 12, 50, 48, 30, 12, 6
+	local STACK_GAP, BOTTOM_PAD, MIN_NAME, IDENT_GAP, MAX_SPREAD = 6, 10, 96, 14, 24
+	local n = #chipWs
+	local chipsTotal = CHIP_GAP * math.max(n - 1, 0)
+	for i = 1, n do chipsTotal = chipsTotal + chipWs[i] end
+	local identMin = math.max(NAME_X + math.min(nameW, MIN_NAME), 70 + premiumW)
+	local out = { chips = {}, ruleY = TOP_H - 1 }
+
+	if identMin + IDENT_GAP + chipsTotal + PAD <= W then
+		out.mode = "row"
+		out.height = TOP_H
+		local x = W - PAD - chipsTotal
+		out.nameWidth = math.max(0, math.min(nameW, x - IDENT_GAP - NAME_X))
+		local y = (TOP_H - CHIP_H) / 2
+		local prevRight
+		for i = 1, n do
+			local w = chipWs[i]
+			local c = { x = x, y = y, w = w }
+			if prevRight then c.dividerX = (prevRight + x) / 2 - 0.5 end
+			out.chips[i] = c
+			prevRight = x + w
+			x = x + w + CHIP_GAP
+		end
+		return out
+	end
+
+	out.mode = "stack"
+	out.nameWidth = math.max(0, math.min(nameW, W - PAD - NAME_X))
+	local avail = math.max(W - 2 * PAD, 1)
+	local lines, line, lineW = {}, {}, 0
+	for i = 1, n do
+		local w = math.min(chipWs[i], avail)
+		local need = (#line > 0) and (lineW + CHIP_GAP + w) or w
+		if #line > 0 and need > avail then
+			lines[#lines + 1] = line
+			line, lineW, need = {}, 0, w
+		end
+		line[#line + 1] = i
+		lineW = need
+	end
+	if #line > 0 then lines[#lines + 1] = line end
+
+	for li, idxs in ipairs(lines) do
+		local total = 0
+		for _, i in ipairs(idxs) do total = total + math.min(chipWs[i], avail) end
+		local gap = CHIP_GAP
+		if #idxs > 1 then
+			gap = math.min((avail - total) / (#idxs - 1), CHIP_GAP + MAX_SPREAD)
+		end
+		local used = total + gap * (#idxs - 1)
+		local x = PAD + (avail - used) / 2
+		local y = TOP_H + STACK_GAP + (li - 1) * (CHIP_H + ROW_GAP)
+		local prevRight
+		for _, i in ipairs(idxs) do
+			local w = math.min(chipWs[i], avail)
+			local c = { x = x, y = y, w = w }
+			if prevRight then c.dividerX = (prevRight + x) / 2 - 0.5 end
+			out.chips[i] = c
+			prevRight = x + w
+			x = x + w + gap
+		end
+	end
+	out.height = TOP_H + STACK_GAP + #lines * CHIP_H + math.max(#lines - 1, 0) * ROW_GAP + BOTTOM_PAD
+	return out
+end
+
+function Library:_layoutFooter(W)
+	local info = self._footerInfo
+	if not info then return FOOTER_H end
+	self._footerW = W
+	local widths = {}
+	for i, c in ipairs(info.chips) do
+		local capW = Library.MeasureText(c.caption.Text, 9, FONT_BOLD)
+		local valW = Library.MeasureText((c.value.Text:gsub("<[^>]+>", "")), 12, FONT_MEDIUM)
+		widths[i] = math.ceil(math.max(capW, valW)) + 2
+	end
+	local nameW = math.ceil(Library.MeasureText(info.nameLabel.Text, 13, FONT_BOLD)) + 2
+	local premiumW = math.ceil(Library.MeasureText(info.premiumLabel.Text, 11, FONT_BOLD)) + 2
+	local L = Library.ComputeFooterLayout(W, nameW, premiumW, widths)
+	info.nameLabel.Size = UDim2.fromOffset(L.nameWidth, 16)
+	for i, c in ipairs(info.chips) do
+		local p = L.chips[i]
+		c.frame.Position = UDim2.fromOffset(p.x, p.y)
+		c.frame.Size = UDim2.fromOffset(p.w, 30)
+		if c.divider then
+			c.divider.Visible = p.dividerX ~= nil
+			if p.dividerX then c.divider.Position = UDim2.fromOffset(p.dividerX, p.y + 4) end
+		end
+	end
+	info.rule.Visible = L.mode == "stack"
+	info.rule.Position = UDim2.fromOffset(12, L.ruleY)
+	info.rule.Size = UDim2.fromOffset(math.max(W - 24, 0), 1)
+	if W == WINDOW_W then self.FooterFullH = L.height end
+	self.FooterH = L.height
+	return L.height
+end
+
+function Library:_refreshFooter()
+	if not self._footerInfo then return end
+	local before = self.FooterH
+	local fh = self:_layoutFooter(self._footerW or WINDOW_W)
+	if fh ~= before then
+		self.Footer.Size = UDim2.new(1, 0, 0, fh)
+		local top = self.Minimized and (DOCK_H + GAP) or self.FooterY
+		self.Holder.Size = UDim2.fromOffset(self._footerW, top + fh)
+	end
+end
+
+function Library:_scheduleFooterLayout()
+	if self._footerPending then return end
+	self._footerPending = true
+	task.defer(function()
+		self._footerPending = false
+		if self.Destroyed then return end
+		self:_refreshFooter()
+	end)
+end
+
+function Library:_applyMonitorParallax(dt)
+	local holder = self.MonitorHolder
+	if not holder then return end
+	local cur = self._monitorShift or Vector2.zero
+	local nxt
+	if self.Holder.Visible and not self._monitorDragging then
+		nxt = self.Parallax
+	elseif cur.Magnitude > 0.05 then
+		nxt = cur:Lerp(Vector2.zero, math.clamp(dt * 14, 0, 1))
+	else
+		nxt = Vector2.zero
+	end
+	if nxt ~= cur then
+		self._monitorShift = nxt
+		holder.Position = UDim2.fromOffset(nxt.X, nxt.Y)
+	end
+end
+
 function Library:SetMinimized(state)
 	if state == self.Minimized then return end
 	self.Minimized = state
@@ -1409,9 +1549,6 @@ function Library:SetMinimized(state)
 		end
 	end
 
-	local fullH = DOCK_H + GAP + PANEL_H + GAP + FOOTER_H
-	local miniH = DOCK_H + GAP + FOOTER_H
-
 	local dockUsed = 108 + (self.TabBarWidth or 0) + 48 + 88
 	local miniW = math.clamp(dockUsed, 320, WINDOW_W)
 
@@ -1421,14 +1558,16 @@ function Library:SetMinimized(state)
 		tween(self.Panel, 0.35, { Size = UDim2.new(1, 0, 0, 0) }).Completed:Connect(function()
 			if self.Minimized then self.Panel.Visible = false end
 		end)
-		tween(self.Footer, 0.35, { Position = UDim2.new(0, 0, 0, DOCK_H + GAP) })
-		tween(self.Holder, 0.4, { Size = UDim2.fromOffset(miniW, miniH) }, Enum.EasingStyle.Quint)
+		local fh = self:_layoutFooter(miniW)
+		tween(self.Footer, 0.35, { Position = UDim2.new(0, 0, 0, DOCK_H + GAP), Size = UDim2.new(1, 0, 0, fh) })
+		tween(self.Holder, 0.4, { Size = UDim2.fromOffset(miniW, DOCK_H + GAP + fh) }, Enum.EasingStyle.Quint)
 	else
 		if self.SearchBar then self.SearchBar.Visible = true end
 		self.Panel.Visible = true
 		tween(self.Panel, 0.4, { Size = UDim2.new(1, 0, 0, PANEL_H) })
-		tween(self.Footer, 0.4, { Position = UDim2.new(0, 0, 0, self.FooterY) })
-		tween(self.Holder, 0.4, { Size = UDim2.fromOffset(WINDOW_W, fullH) }, Enum.EasingStyle.Quint)
+		local fh = self:_layoutFooter(WINDOW_W)
+		tween(self.Footer, 0.4, { Position = UDim2.new(0, 0, 0, self.FooterY), Size = UDim2.new(1, 0, 0, fh) })
+		tween(self.Holder, 0.4, { Size = UDim2.fromOffset(WINDOW_W, self.FooterY + fh) }, Enum.EasingStyle.Quint)
 	end
 end
 
@@ -1444,7 +1583,7 @@ function Library:OnToggleKeyChanged(fn)
 	task.spawn(fn, self.ToggleKey)
 end
 
-function Library.BindMonitorDrag(bar, home, rowAt, connections)
+function Library.BindMonitorDrag(bar, home, rowAt, connections, onDrag)
 	local active, dragging, moved, startPos, startOff = nil, false, false, nil, nil
 	local function press(input, row)
 		if not isPress(input) or active == input then return end
@@ -1459,6 +1598,7 @@ function Library.BindMonitorDrag(bar, home, rowAt, connections)
 			conn:Disconnect()
 			active = nil
 			dragging = false
+			if onDrag then onDrag(false) end
 			if not moved then
 				local target = row or rowAt(startPos.Y)
 				if target then target:_click() end
@@ -1469,7 +1609,10 @@ function Library.BindMonitorDrag(bar, home, rowAt, connections)
 		if not dragging or not isMove(input) then return end
 		local d = Vector2.new(input.Position.X, input.Position.Y) - startPos
 		if not moved and d.Magnitude < 4 then return end
-		moved = true
+		if not moved then
+			moved = true
+			if onDrag then onDrag(true) end
+		end
 		bar.Position = UDim2.new(home.X.Scale, startOff.X + d.X, home.Y.Scale, startOff.Y + d.Y)
 	end))
 	bar.InputBegan:Connect(function(input) press(input, nil) end)
@@ -1495,6 +1638,14 @@ function Library:_ensureMonitorBar()
 	if self.MonitorBar then return self.MonitorBar end
 	local HOME = UDim2.new(0.5, 0, 0, 12)
 	self.MonitorHome = HOME
+	local holder = new("Frame", {
+		Name = "MonitorHolder",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Parent = self.Gui,
+	})
+	self.MonitorHolder = holder
 	local bar = new("Frame", {
 		Name = "MonitorBar",
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -1502,11 +1653,11 @@ function Library:_ensureMonitorBar()
 		Size = UDim2.fromOffset(150, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = THEME.Glass,
-		BackgroundTransparency = self.IsMobile and SOLID_T or GLASS_DOCK_T,
+		BackgroundTransparency = (self.IsMobile or not self.AcrylicEnabled) and SOLID_T or GLASS_DOCK_T,
 		BorderSizePixel = 0,
 		Active = true,
 		Visible = false,
-		Parent = self.Gui,
+		Parent = holder,
 	}, {
 		corner(8),
 		stroke(Color3.new(1, 1, 1), 0.86),
@@ -1528,7 +1679,7 @@ function Library:_ensureMonitorBar()
 	self.MonitorItems = {}
 	self.MonitorCount = 0
 
-	self._monitorPress = Library.BindMonitorDrag(bar, HOME, function(y) return self:_monitorRowAt(y) end, self.Connections)
+	self._monitorPress = Library.BindMonitorDrag(bar, HOME, function(y) return self:_monitorRowAt(y) end, self.Connections, function(on) self._monitorDragging = on end)
 	return bar
 end
 
@@ -1569,7 +1720,7 @@ function Library:_refreshMonitorSeparators()
 	end
 end
 
-function Library.BuildInlineButtons(frame, box, buttons, getText)
+function Library.BuildInlineButtons(frame, box, buttons, getText, flat)
 	local SIZE, GAP, EDGE = 30, 6, 12
 	local n = #buttons
 	box.Position = UDim2.new(1, -(EDGE + n * (SIZE + GAP)), 0.5, 0)
@@ -1580,7 +1731,7 @@ function Library.BuildInlineButtons(frame, box, buttons, getText)
 			Position = UDim2.new(1, -fromRight, 0.5, 0),
 			Size = UDim2.fromOffset(SIZE, SIZE),
 			BackgroundColor3 = THEME.Card,
-			BackgroundTransparency = 0.94,
+			BackgroundTransparency = flat and 1 or 0.94,
 			AutoButtonColor = false,
 			Text = "",
 			ZIndex = 8,
@@ -1602,12 +1753,12 @@ function Library.BuildInlineButtons(frame, box, buttons, getText)
 			})
 		end
 		btn.MouseEnter:Connect(function()
-			tween(btn, 0.15, { BackgroundTransparency = 0.82 })
+			tween(btn, 0.15, { BackgroundTransparency = flat and 0.9 or 0.82 })
 			if img then tween(img, 0.15, { ImageTransparency = 0 }) end
 			if glyph then tween(glyph, 0.15, { TextColor3 = THEME.Text }) end
 		end)
 		btn.MouseLeave:Connect(function()
-			tween(btn, 0.15, { BackgroundTransparency = 0.94 })
+			tween(btn, 0.15, { BackgroundTransparency = flat and 1 or 0.94 })
 			if img then tween(img, 0.15, { ImageTransparency = 0.25 }) end
 			if glyph then tween(glyph, 0.15, { TextColor3 = THEME.SubText }) end
 		end)
@@ -1685,19 +1836,21 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		local box = new("TextBox", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -10, 0.5, 0),
-			Size = btnCount > 0 and UDim2.new(1, -(94 + btnCount * 36), 1, -8) or UDim2.new(1, o.Name and -90 or -20, 1, -8),
+			Size = btnCount > 0 and UDim2.new(1, -(94 + btnCount * 36), 1, -12) or UDim2.new(1, o.Name and -90 or -20, 1, -8),
 			BackgroundTransparency = 1,
 			ClearTextOnFocus = false,
 			Font = FONT, TextSize = 13, TextColor3 = THEME.Body,
 			PlaceholderText = o.Placeholder or "",
 			PlaceholderColor3 = THEME.Muted,
 			Text = tostring(o.Default or ""),
-			TextXAlignment = Enum.TextXAlignment.Right,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			ClipsDescendants = true,
 			ZIndex = 6, Parent = wrap,
-		})
+		}, { corner(6), stroke(Color3.new(1, 1, 1), 0.78), pad(0, 8, 0, 8) })
 		box.FocusLost:Connect(function() fire(o.Callback, box.Text) end)
 		if btnCount > 0 then
-			Library.BuildInlineButtons(wrap, box, o.Buttons, function() return box.Text end)
+			Library.BuildInlineButtons(wrap, box, o.Buttons, function() return box.Text end, true)
 		end
 		local a = {}
 		function a:GetText() return box.Text end
@@ -1729,15 +1882,33 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		end
 		local current = label({
 			Text = tostring(selected or "--"), Font = FONT, TextSize = 12, TextColor3 = THEME.Body,
-			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -28, 0, HEAD / 2 - 7),
+			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -36, 0, HEAD / 2 - 7),
 			Size = UDim2.fromOffset(130, 14), TextXAlignment = Enum.TextXAlignment.Right,
 			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = wrap,
 		})
-		local arrow = label({
-			Text = "\xE2\x96\xBE", Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.SubText,
-			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, HEAD / 2 - 7),
-			Size = UDim2.fromOffset(14, 14), ZIndex = 5, Parent = wrap,
-		})
+		local arrowIcon = type(ICONS.Arrow) == "string" and ICONS.Arrow ~= ""
+		local arrow
+		if arrowIcon then
+			arrow = new("ImageLabel", {
+				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0, HEAD / 2),
+				Size = UDim2.fromOffset(24, 16), BackgroundTransparency = 1,
+				ScaleType = Enum.ScaleType.Fit,
+				Image = ICONS.Arrow, ImageColor3 = THEME.Body, ZIndex = 5, Parent = wrap,
+			})
+		else
+			arrow = label({
+				Text = "▾", TextSize = 12, TextColor3 = THEME.SubText,
+				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0, HEAD / 2),
+				Size = UDim2.fromOffset(14, 14), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 5, Parent = wrap,
+			})
+		end
+		local function setArrow(open)
+			if arrowIcon then
+				tween(arrow, 0.3, { Rotation = open and 180 or 0, ImageColor3 = open and THEME.Text or THEME.Body })
+			else
+				tween(arrow, 0.3, { Rotation = open and 180 or 0, TextColor3 = open and THEME.Text or THEME.SubText })
+			end
+		end
 		local btn = new("TextButton", {
 			Size = UDim2.new(1, 0, 0, HEAD), BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = wrap,
 		})
@@ -1746,7 +1917,7 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		local function closeList()
 			if listFrame then listFrame:Destroy(); listFrame = nil end
 			wrap.Size = UDim2.new(1, 0, 0, HEAD)
-			arrow.Text = "\xE2\x96\xBE"
+			setArrow(false)
 		end
 		local function openList()
 			if listFrame then listFrame:Destroy(); listFrame = nil end
@@ -1761,15 +1932,25 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 			}, { pad(0, 6, 6, 6), new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }) })
 			for i, opt in ipairs(options) do
 				local ob = new("TextButton", {
-					Size = UDim2.new(1, 0, 0, ROW), BackgroundTransparency = 1, LayoutOrder = i,
-					Font = FONT, TextSize = 12,
+					Size = UDim2.new(1, 0, 0, ROW), BackgroundColor3 = THEME.Card, BackgroundTransparency = 1,
+					LayoutOrder = i, AutoButtonColor = false,
+					Font = FONT, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
 					TextColor3 = (opt == selected) and THEME.Text or THEME.SubText,
 					Text = tostring(opt), ZIndex = 6, Parent = listFrame,
-				})
+				}, { corner(5), pad(0, 24, 0, 10) })
+				if opt == selected then
+					new("Frame", {
+						AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
+						Size = UDim2.fromOffset(5, 5), BackgroundColor3 = THEME.Accent,
+						BorderSizePixel = 0, ZIndex = 7, Parent = ob,
+					}, { round() })
+				end
+				ob.MouseEnter:Connect(function() tween(ob, 0.15, { BackgroundTransparency = 0.94 }) end)
+				ob.MouseLeave:Connect(function() tween(ob, 0.15, { BackgroundTransparency = 1 }) end)
 				ob.Activated:Connect(function() api:Set(opt); closeList() end)
 			end
 			wrap.Size = UDim2.new(1, 0, 0, HEAD + h)
-			arrow.Text = "\xE2\x96\xB4"
+			setArrow(true)
 		end
 		btn.Activated:Connect(function()
 			if listFrame then closeList() else openList() end
