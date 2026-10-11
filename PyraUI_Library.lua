@@ -2218,12 +2218,12 @@ function Library:CreateSidePanel(opts)
 		if opts.Editor then return nil end
 		o = o or {}
 		local sideSign = o.Side == "Right" and 1 or -1
-		local centerY = o.Slot and (20 + (o.Slot - 1) * 32) or 36
+		local offsetX = o.Slot and (50 + (o.Slot - 1) * 32) or 66
 		local iconSize = o.IconSize or 20
 		local on = false
 		local btn = new("TextButton", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, sideSign * 66, 0, centerY),
+			Position = UDim2.new(0.5, sideSign * offsetX, 0, 36),
 			Size = UDim2.fromOffset(32, 32),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
@@ -2270,7 +2270,7 @@ function Library:CreateSidePanel(opts)
 		clearBtn = new("TextButton", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.new(0.5, 30, 0, 8),
-			Size = UDim2.fromOffset(26, 26),
+			Size = UDim2.fromOffset(22, 22),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Text = "",
@@ -4966,12 +4966,12 @@ function Library.BuildSubMarker(frame, height)
 	local function bar(x, y, w, h)
 		return new("Frame", {
 			Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h),
-			BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.7,
+			BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0,
 			BorderSizePixel = 0, ZIndex = 4, Parent = frame,
 		}, { corner(1) })
 	end
 	bar(22, 1, 2, mid)
-	bar(22, mid - 1, 16, 2)
+	bar(22, mid - 1, 30, 2)
 end
 
 function Tab:AddColorPicker(opts)
@@ -5944,58 +5944,83 @@ function Tab:AddPlayerSearch(opts)
 			if c:IsA("TextButton") then c:Destroy() end
 		end
 		query = (query or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
-		local shown = 0
+		local entries = {}
+		local me = game:GetService("Players").LocalPlayer
 		for _, p in ipairs(Players:GetPlayers()) do
-			if p ~= game:GetService("Players").LocalPlayer then
+			if p ~= me then
 				local hitName = p.Name:lower():find(query, 1, true)
 				local hitDisp = p.DisplayName:lower():find(query, 1, true)
-				if (query == "" or hitName or hitDisp) and shown < 20 then
-					shown += 1
-					local row = new("TextButton", {
-						Size = UDim2.new(1, 0, 0, ROW_H),
-						BackgroundColor3 = THEME.Card,
-						BackgroundTransparency = 1,
-						AutoButtonColor = false,
-						Text = "",
-						LayoutOrder = shown,
-						ZIndex = 6,
-						Parent = listHolder,
-					}, { corner(7), stroke(Color3.new(1, 1, 1), 0.88) })
-					local pfp = new("ImageLabel", {
-						AnchorPoint = Vector2.new(0, 0.5),
-						Position = UDim2.new(0, 6, 0.5, 0),
-						Size = UDim2.fromOffset(28, 28),
-						BackgroundColor3 = THEME.Switch,
-						ZIndex = 7,
-						Parent = row,
-					}, { round(), stroke(Color3.new(1, 1, 1), 0.85) })
-					task.spawn(function()
-						local ok, img = pcall(function()
-							return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
-						end)
-						if ok and pfp.Parent then pfp.Image = img end
-					end)
-					label({
-						Text = p.DisplayName, Font = FONT_MEDIUM, TextSize = 13, TextColor3 = THEME.Text,
-						Position = UDim2.fromOffset(42, 5), Size = UDim2.new(1, -52, 0, 16),
-						TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
-					})
-					label({
-						Text = "@" .. p.Name, TextSize = 11, TextColor3 = THEME.SubText,
-						Position = UDim2.fromOffset(42, 21), Size = UDim2.new(1, -52, 0, 13),
-						TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
-					})
-					row.MouseEnter:Connect(function() tween(row, 0.12, { BackgroundTransparency = 0.9 }) end)
-					row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = 1 }) end)
-					row.Activated:Connect(function()
-						selecting = true
-						box.Text = p.DisplayName
-						selecting = false
-						fire(opts.Callback, p)
-						api:Close()
-					end)
+				if query == "" or hitName or hitDisp then
+					local statusText, statusColor, rank
+					if type(opts.RowInfo) == "function" then
+						local ok, t, c, r = pcall(opts.RowInfo, p)
+						if ok then statusText, statusColor, rank = t, c, r end
+					end
+					entries[#entries + 1] = { p = p, text = statusText, color = statusColor, rank = rank or 1, key = p.DisplayName:lower(), name = p.Name:lower() }
 				end
 			end
+		end
+		table.sort(entries, function(a, b)
+			if a.rank ~= b.rank then return a.rank < b.rank end
+			if a.key ~= b.key then return a.key < b.key end
+			return a.name < b.name
+		end)
+		local shown = 0
+		for _, entry in ipairs(entries) do
+			if shown >= 20 then break end
+			local p = entry.p
+			shown += 1
+			local statusW = entry.text and 80 or 0
+			local row = new("TextButton", {
+				Size = UDim2.new(1, 0, 0, ROW_H),
+				BackgroundColor3 = THEME.Card,
+				BackgroundTransparency = 1,
+				AutoButtonColor = false,
+				Text = "",
+				LayoutOrder = shown,
+				ZIndex = 6,
+				Parent = listHolder,
+			}, { corner(7), stroke(Color3.new(1, 1, 1), 0.88) })
+			local pfp = new("ImageLabel", {
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, 6, 0.5, 0),
+				Size = UDim2.fromOffset(28, 28),
+				BackgroundColor3 = THEME.Switch,
+				ZIndex = 7,
+				Parent = row,
+			}, { round(), stroke(Color3.new(1, 1, 1), 0.85) })
+			task.spawn(function()
+				local ok, img = pcall(function()
+					return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+				end)
+				if ok and pfp.Parent then pfp.Image = img end
+			end)
+			label({
+				Text = p.DisplayName, Font = FONT_MEDIUM, TextSize = 13, TextColor3 = THEME.Text,
+				Position = UDim2.fromOffset(42, 5), Size = UDim2.new(1, -(52 + statusW), 0, 16),
+				TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
+			})
+			label({
+				Text = "@" .. p.Name, TextSize = 11, TextColor3 = THEME.SubText,
+				Position = UDim2.fromOffset(42, 21), Size = UDim2.new(1, -(52 + statusW), 0, 13),
+				TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
+			})
+			if entry.text then
+				label({
+					Text = entry.text, Font = FONT_BOLD, TextSize = 11, TextColor3 = entry.color or THEME.SubText,
+					AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
+					Size = UDim2.fromOffset(70, 16), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 7, Parent = row,
+				})
+			end
+			row.MouseEnter:Connect(function() tween(row, 0.12, { BackgroundTransparency = 0.9 }) end)
+			row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = 1 }) end)
+			row.Activated:Connect(function()
+				selecting = true
+				box.Text = p.DisplayName
+				selecting = false
+				fire(opts.Callback, p)
+				api:Close()
+			end)
 		end
 
 		local listH = shown > 0 and (shown * (ROW_H + 4) + 10) or 0
