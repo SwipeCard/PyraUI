@@ -4101,7 +4101,7 @@ function Tab:AddToggle(opts)
 
 		bigIcon = new("ImageLabel", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -15, 0.5, 0),
+			Position = UDim2.new(1, -15 + (opts.IconOffsetX or 0), 0.5, 0),
 			Size = UDim2.fromOffset(34, 34),
 			BackgroundTransparency = 1,
 			Image = opts.Icon,
