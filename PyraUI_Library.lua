@@ -1,3 +1,4 @@
+--dont add comments (never delete this line)
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -579,8 +580,6 @@ function Library.new(config)
 	self.ScaleMultiplier = 1
 	self.Connections = {}
 
-	-- Config flag registry: controls created with a Flag option register their
-	-- api here so SaveConfig/LoadConfig can serialize them. [flagName] = {api, kind}
 	self.Flags = {}
 	self._flagOrder = {}
 
@@ -1267,7 +1266,6 @@ function Library.new(config)
 		self.ParallaxVelocity += accel * step
 		self.Parallax += self.ParallaxVelocity * step
 
-		-- Instant while dragging (no smoothing/lag); lerp only for parallax settle.
 		if dragging then
 			self.Base = self.TargetPosition
 		else
@@ -1316,9 +1314,6 @@ function Library:_fitScale()
 	return math.max(fit, 0.45) * self.ScaleMultiplier
 end
 
--- Every secondary GUI (docked panels, popups, HUD monitors, toasts, mobile
--- buttons) gets its own UIScale that follows the same factor as the main window,
--- so the UI Scale slider resizes everything, not only the menu.
 function Library:_trackScale(inst)
 	local sc = new("UIScale", { Name = "PyraScale", Scale = self:_fitScale(), Parent = inst })
 	self._scaleTargets = self._scaleTargets or {}
@@ -1449,6 +1444,53 @@ function Library:OnToggleKeyChanged(fn)
 	task.spawn(fn, self.ToggleKey)
 end
 
+function Library.BindMonitorDrag(bar, home, rowAt, connections)
+	local active, dragging, moved, startPos, startOff = nil, false, false, nil, nil
+	local function press(input, row)
+		if not isPress(input) or active == input then return end
+		active = input
+		dragging = true
+		moved = false
+		startPos = Vector2.new(input.Position.X, input.Position.Y)
+		startOff = Vector2.new(bar.Position.X.Offset, bar.Position.Y.Offset)
+		local conn
+		conn = input.Changed:Connect(function()
+			if input.UserInputState ~= Enum.UserInputState.End then return end
+			conn:Disconnect()
+			active = nil
+			dragging = false
+			if not moved then
+				local target = row or rowAt(startPos.Y)
+				if target then target:_click() end
+			end
+		end)
+	end
+	table.insert(connections, UserInputService.InputChanged:Connect(function(input)
+		if not dragging or not isMove(input) then return end
+		local d = Vector2.new(input.Position.X, input.Position.Y) - startPos
+		if not moved and d.Magnitude < 4 then return end
+		moved = true
+		bar.Position = UDim2.new(home.X.Scale, startOff.X + d.X, home.Y.Scale, startOff.Y + d.Y)
+	end))
+	bar.InputBegan:Connect(function(input) press(input, nil) end)
+	return press
+end
+
+function Library:_monitorRowAt(y)
+	local best, bestDist = nil, math.huge
+	for _, it in ipairs(self.MonitorOrder) do
+		local cell = it.cell
+		if it.shown and cell.Visible then
+			local top = cell.AbsolutePosition.Y
+			local bottom = top + cell.AbsoluteSize.Y
+			local dist = 0
+			if y < top then dist = top - y elseif y > bottom then dist = y - bottom end
+			if dist < bestDist then best, bestDist = it, dist end
+		end
+	end
+	return best
+end
+
 function Library:_ensureMonitorBar()
 	if self.MonitorBar then return self.MonitorBar end
 	local HOME = UDim2.new(0.5, 0, 0, 12)
@@ -1486,23 +1528,7 @@ function Library:_ensureMonitorBar()
 	self.MonitorItems = {}
 	self.MonitorCount = 0
 
-	local dragging, dragStart, startOff
-	bar.InputBegan:Connect(function(input)
-		if not isPress(input) then return end
-		dragging = true
-		dragStart = input.Position
-		startOff = Vector2.new(bar.Position.X.Offset, bar.Position.Y.Offset)
-		local conn
-		conn = input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then dragging = false conn:Disconnect() end
-		end)
-	end)
-	table.insert(self.Connections, UserInputService.InputChanged:Connect(function(input)
-		if dragging and isMove(input) then
-			local d = input.Position - dragStart
-			bar.Position = UDim2.new(HOME.X.Scale, startOff.X + d.X, HOME.Y.Scale, startOff.Y + d.Y)
-		end
-	end))
+	self._monitorPress = Library.BindMonitorDrag(bar, HOME, function(y) return self:_monitorRowAt(y) end, self.Connections)
 	return bar
 end
 
@@ -1543,12 +1569,8 @@ function Library:_refreshMonitorSeparators()
 	end
 end
 
--- Small icon buttons that live INSIDE an input row, to the right of its text box
--- (e.g. save / delete next to a config name). Each entry:
---   { Icon = "rbxassetid://123", Glyph = "S" (fallback text), Callback = function(text) end }
--- The first entry is the left-most button. The text box shrinks to make room.
 function Library.BuildInlineButtons(frame, box, buttons, getText)
-	local SIZE, GAP, EDGE = 34, 6, 12   -- keep SIZE + GAP in sync with the "* 40" in Tab:AddInput
+	local SIZE, GAP, EDGE = 30, 6, 12
 	local n = #buttons
 	box.Position = UDim2.new(1, -(EDGE + n * (SIZE + GAP)), 0.5, 0)
 	for j, b in ipairs(buttons) do
@@ -1566,11 +1588,9 @@ function Library.BuildInlineButtons(frame, box, buttons, getText)
 		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.88) })
 		local img, glyph
 		if type(b.Icon) == "string" and b.Icon ~= "" then
-			-- No tint: the icon keeps whatever colours you drew it with. Drawn big
-			-- (26px) so a high-res source is not squashed into a few pixels.
 			img = new("ImageLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromOffset(26, 26), BackgroundTransparency = 1,
+				Size = UDim2.fromOffset(22, 22), BackgroundTransparency = 1,
 				Image = b.Icon, ImageTransparency = 0.25, ScaleType = Enum.ScaleType.Fit,
 				ZIndex = 9, Parent = btn,
 			})
@@ -1598,8 +1618,6 @@ function Library.BuildInlineButtons(frame, box, buttons, getText)
 	end
 end
 
--- Shared content builders (text area / input / dropdown / row / grid buttons)
--- used by both the free popup (CreatePanel) and the docked SidePanel.
 function Library.InstallPanelWidgets(panel, body, nextOrder)
 	function panel:AddTextArea(o)
 		o = o or {}
@@ -1645,11 +1663,11 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		return a
 	end
 
-	-- Single-line labelled input inside the panel.
 	function panel:AddInput(o)
 		o = o or {}
+		local btnCount = type(o.Buttons) == "table" and #o.Buttons or 0
 		local wrap = new("Frame", {
-			Size = UDim2.new(1, 0, 0, 34),
+			Size = UDim2.new(1, 0, 0, btnCount > 0 and 40 or 34),
 			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
 			BackgroundTransparency = 0.2,
 			BorderSizePixel = 0,
@@ -1667,7 +1685,7 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		local box = new("TextBox", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -10, 0.5, 0),
-			Size = UDim2.new(1, o.Name and -90 or -20, 1, -8),
+			Size = btnCount > 0 and UDim2.new(1, -(94 + btnCount * 36), 1, -8) or UDim2.new(1, o.Name and -90 or -20, 1, -8),
 			BackgroundTransparency = 1,
 			ClearTextOnFocus = false,
 			Font = FONT, TextSize = 13, TextColor3 = THEME.Body,
@@ -1678,14 +1696,15 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 			ZIndex = 6, Parent = wrap,
 		})
 		box.FocusLost:Connect(function() fire(o.Callback, box.Text) end)
+		if btnCount > 0 then
+			Library.BuildInlineButtons(wrap, box, o.Buttons, function() return box.Text end)
+		end
 		local a = {}
 		function a:GetText() return box.Text end
 		function a:SetText(t) box.Text = tostring(t or "") end
 		return a
 	end
 
-	-- Labelled dropdown inside a panel. The list opens INLINE: the row grows and
-	-- pushes the widgets below it down, so it can never be clipped by the panel.
 	function panel:AddDropdown(o)
 		o = o or {}
 		local options = o.Options or {}
@@ -1719,7 +1738,6 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, HEAD / 2 - 7),
 			Size = UDim2.fromOffset(14, 14), ZIndex = 5, Parent = wrap,
 		})
-		-- Only the header row is clickable (the list below has its own buttons).
 		local btn = new("TextButton", {
 			Size = UDim2.new(1, 0, 0, HEAD), BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = wrap,
 		})
@@ -1758,7 +1776,7 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		end)
 		function api:Get() return selected end
 		function api:Set(opt) selected = opt; current.Text = tostring(opt); fire(o.Callback, opt) end
-		-- Swap the option list (e.g. after saving or deleting a config).
+		function api:SetSelected(opt) selected = opt; current.Text = tostring(opt or "--") end
 		function api:SetOptions(newOptions)
 			options = newOptions or {}
 			local stillThere = false
@@ -1814,8 +1832,6 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		return row:AddButton(o)
 	end
 
-	-- Grid of equal-width buttons, `cols` per row (e.g. 2 for a 2x2). Rows grow
-	-- automatically as buttons are added.
 	function panel:AddGrid(cols)
 		cols = math.max(1, cols or 2)
 		local wrap = new("Frame", {
@@ -1878,9 +1894,7 @@ function Library:CreateSidePanel(opts)
 		local a = createAcrylic(root)
 		table.insert(self.Acrylic, a)
 	end
-	-- Follow the glass toggle from the start (opaque when blur is off).
 	if not self.AcrylicEnabled then root.BackgroundTransparency = SOLID_T end
-	-- ...and the UI Scale slider.
 	self:_trackScale(root)
 
 	new("ImageLabel", {
@@ -1899,7 +1913,7 @@ function Library:CreateSidePanel(opts)
 	local title = label({
 		Text = opts.Title or "Target Info", Font = FONT_BOLD, TextSize = 14,
 		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.new(1, -72, 1, 0),
+		Size = UDim2.new(1, opts.Closable and -144 or -72, 1, 0),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = header,
 	})
@@ -1907,7 +1921,7 @@ function Library:CreateSidePanel(opts)
 	local pinned = opts.Pinned == true
 	local pinBtn = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0.5, 0),
+		Position = UDim2.new(1, opts.Closable and -42 or -10, 0.5, 0),
 		Size = UDim2.fromOffset(28, 28),
 		BackgroundColor3 = THEME.Card,
 		BackgroundTransparency = 1,
@@ -1929,6 +1943,37 @@ function Library:CreateSidePanel(opts)
 			Text = "📌", TextSize = 13, Size = UDim2.fromScale(1, 1),
 			TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 5, Parent = pinBtn,
 		})
+	end
+
+	if opts.Closable then
+		local closeBtn = new("TextButton", {
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(28, 28), BackgroundColor3 = THEME.Card,
+			BackgroundTransparency = 1, AutoButtonColor = false,
+			Text = "", ZIndex = 4, Parent = header,
+		}, { corner(7) })
+		local closeImg, closeGlyph
+		if type(ICONS.Close) == "string" and ICONS.Close ~= "" then
+			closeImg = new("ImageLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+				Image = ICONS.Close, ImageColor3 = THEME.SubText, ZIndex = 5, Parent = closeBtn,
+			})
+		else
+			closeGlyph = label({
+				Text = "✕", Font = FONT_BOLD, TextSize = 13, TextColor3 = THEME.SubText,
+				Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 5, Parent = closeBtn,
+			})
+		end
+		closeBtn.MouseEnter:Connect(function()
+			if closeImg then tween(closeImg, 0.15, { ImageColor3 = Color3.fromRGB(235, 120, 120) }) end
+			if closeGlyph then tween(closeGlyph, 0.15, { TextColor3 = Color3.fromRGB(235, 120, 120) }) end
+		end)
+		closeBtn.MouseLeave:Connect(function()
+			if closeImg then tween(closeImg, 0.15, { ImageColor3 = THEME.SubText }) end
+			if closeGlyph then tween(closeGlyph, 0.15, { TextColor3 = THEME.SubText }) end
+		end)
+		closeBtn.Activated:Connect(function() playSound(SOUND_CLICK, 0.3, 0.9) panel:Close() end)
 	end
 
 	local body = new("Frame", {
@@ -1966,8 +2011,6 @@ function Library:CreateSidePanel(opts)
 	avatar.AnchorPoint = Vector2.new(0.5, 0)
 	avatar.Position = UDim2.new(0.5, 0, 0, 4)
 
-	-- Editor mode: a docked panel that hosts form widgets (text area, inputs,
-	-- dropdowns, buttons) instead of the avatar + stat rows.
 	if opts.Editor then
 		avatarWrap:Destroy()
 		local lay = body:FindFirstChildOfClass("UIListLayout")
@@ -2115,12 +2158,16 @@ function Library:CreateSidePanel(opts)
 
 	function panel:IsDetached() return detached end
 	function panel:IsShown() return shown end
-	-- Open/close from a button. Also closes a panel that was dragged off the dock.
-	function panel:Toggle()
+	function panel:Close()
 		if shown or detached then
 			detached = false
 			shown = true
 			panel:Hide()
+		end
+	end
+	function panel:Toggle()
+		if shown or detached then
+			panel:Close()
 		else
 			panel:Show()
 		end
@@ -2284,7 +2331,6 @@ function Library:AddMonitor(key, label_)
 		LayoutOrder = order * 2 - 1,
 		Parent = self.MonitorBar,
 	})
-	-- Full-width stacked row: CAPTION on the left, value on the right.
 	local cell = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 22),
 		BackgroundTransparency = 1,
@@ -2313,14 +2359,18 @@ function Library:AddMonitor(key, label_)
 	local win = self
 	local FADE = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local fadeToken = 0
-	local item = { cell = cell, sep = sep, value = valueLabel, caption = capLabel, shown = false }
+	local item = { cell = cell, sep = sep, value = valueLabel, caption = capLabel, shown = false, clickFns = {} }
 	function item:Set(v) valueLabel.Text = tostring(v) end
 	function item:SetColor(c)
 		valueLabel.TextColor3 = c or THEME.Text
 	end
-	function item:OnClick(fn)
-		clickBtn.Activated:Connect(function() if type(fn) == "function" then fn() end end)
+	function item:_click()
+		for _, fn in ipairs(self.clickFns) do fn() end
 	end
+	function item:OnClick(fn)
+		if type(fn) == "function" then table.insert(self.clickFns, fn) end
+	end
+	clickBtn.InputBegan:Connect(function(input) win._monitorPress(input, item) end)
 	function item:Show(on)
 		on = on ~= false
 		if on == self.shown then return end
@@ -2470,11 +2520,9 @@ function Library:SetAcrylic(state)
 	tween(self.Dock, 0.3, { BackgroundTransparency = dockT })
 	tween(self.Panel, 0.3, { BackgroundTransparency = panelT })
 	tween(self.Footer, 0.3, { BackgroundTransparency = dockT })
-	-- Monitor bar follows the glass setting too.
 	if self.MonitorBar then
 		tween(self.MonitorBar, 0.3, { BackgroundTransparency = self.AcrylicEnabled and GLASS_DOCK_T or SOLID_T })
 	end
-	-- Docked side panels (e.g. the Fast Flags editor) follow it too.
 	if self.SidePanels then
 		for _, p in ipairs(self.SidePanels) do
 			if p and p.Root then
@@ -2482,7 +2530,6 @@ function Library:SetAcrylic(state)
 			end
 		end
 	end
-	-- Every CreatePanel popup follows it too.
 	if self._panels then
 		for _, p in ipairs(self._panels) do
 			if p and p.root then
@@ -2729,15 +2776,12 @@ function Library:_index(tab, frame, name, desc)
 	})
 end
 
--- Register a control's api under a flag name so it can be saved/loaded.
--- kind: "toggle" | "slider" | "dropdown" | "input" | "keybind" | "color" | "range"
 function Library:_registerFlag(flag, api, kind)
 	if type(flag) ~= "string" or flag == "" or not api then return end
 	if not self.Flags[flag] then table.insert(self._flagOrder, flag) end
 	self.Flags[flag] = { api = api, kind = kind }
 end
 
--- Serialize one flag's current value into a plain JSON-safe value.
 local function _flagSerialize(entry)
 	local api, kind = entry.api, entry.kind
 	local ok, v = pcall(api.Get, api)
@@ -2749,7 +2793,6 @@ local function _flagSerialize(entry)
 		if typeof(v) == "EnumItem" then return v.Name end
 		return nil
 	elseif kind == "range" then
-		-- Get() returns two numbers
 		local ok2, a, b = pcall(api.Get, api)
 		if ok2 then return { a, b } end
 		return nil
@@ -2760,7 +2803,7 @@ local function _flagSerialize(entry)
 		end
 		return nil
 	end
-	return v -- toggle(bool)/slider(num)/dropdown(str)/input(str)
+	return v
 end
 
 local function _flagApply(entry, value)
@@ -2790,7 +2833,6 @@ local function _flagApply(entry, value)
 	end
 end
 
--- Collect all registered flags into a table.
 function Library:GetConfig()
 	local out = {}
 	for flag, entry in pairs(self.Flags) do
@@ -2800,7 +2842,6 @@ function Library:GetConfig()
 	return out
 end
 
--- Apply a table of flag values to the registered controls.
 function Library:SetConfig(data)
 	if type(data) ~= "table" then return end
 	for _, flag in ipairs(self._flagOrder) do
@@ -3632,7 +3673,6 @@ function Tab:AddToggle(opts)
 			Parent = frame,
 		})
 	elseif isCheckbox then
-		-- Square selection box with a checkmark, instead of the pill switch.
 		checkbox = new("Frame", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -12, 0.5, 0),
@@ -4435,9 +4475,6 @@ function Tab:AddDropdown(opts)
 	})
 	self.Window:_index(self, frame, opts.Name or "Dropdown", opts.Description)
 
-	-- Optional inline toggle chip on the header (e.g. an "Auto Rejoin" switch
-	-- living inside a device-select dropdown). Tapping it toggles independently
-	-- of the dropdown opening.
 	local hasChip = type(opts.Chip) == "string"
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
@@ -4593,17 +4630,13 @@ function Tab:AddDropdown(opts)
 		end
 	end
 	function api:Set(option)
-		-- AlwaysFire: a "pick one to run" dropdown (e.g. Load Config) must act on
-		-- every click, even when the clicked option is already the selected one.
 		if option == selected and not opts.AlwaysFire then return end
 		selected = option
 		refresh(false)
 		fire(opts.Callback, selected)
 	end
 	function api:Get() return selected end
-	-- Change the shown selection WITHOUT firing the callback.
 	function api:SetSelected(option) selected = option; refresh(true) end
-	-- Replace the option list at runtime (e.g. after saving a new config).
 	function api:SetOptions(newOptions)
 		options = newOptions or {}
 		for _, child in ipairs(list:GetChildren()) do
@@ -5298,12 +5331,10 @@ function Tab:AddInput(opts)
 	opts = opts or {}
 	local isSearch = opts.Search == true
 	local hasPicker = type(opts.PickerSource) == "function"
-	-- Inline icon buttons (e.g. save / delete) are 34px + a 6px gap each, beside the
-	-- box. The row grows to 46px so the bigger, sharper icons have room.
 	local btnCount = (type(opts.Buttons) == "table" and not isSearch) and #opts.Buttons or 0
-	local frame = elementFrame(self, opts.Description and 50 or (btnCount > 0 and 46 or 38))
+	local frame = elementFrame(self, opts.Description and 50 or (btnCount > 0 and 42 or 38))
 	frame.ClipsDescendants = true
-	titleBlock(frame, opts.Name or "Input", opts.Description, 160 + btnCount * 40)
+	titleBlock(frame, opts.Name or "Input", opts.Description, 160 + btnCount * 36)
 	self.Window:_index(self, frame, opts.Name or "Input", opts.Description)
 
 	local COLLAPSED, EXPANDED = 28, 170
@@ -5331,7 +5362,6 @@ function Tab:AddInput(opts)
 	local boxStroke = box:FindFirstChildOfClass("UIStroke")
 	hoverable(frame, frame)
 
-	-- Optional inline icon buttons right next to the box (see BuildInlineButtons).
 	if type(opts.Buttons) == "table" and #opts.Buttons > 0 and not isSearch then
 		Library.BuildInlineButtons(frame, box, opts.Buttons, function() return box.Text end)
 	end
@@ -5703,13 +5733,6 @@ function Tab:AddPlayerSearch(opts)
 	return api
 end
 
--- =============================================================================
--- AddTextArea: a tall, multi-line, scrolling text box element. Good for long
--- pasted content (configs, flag lists, notes). Returns an api with GetText /
--- SetText / OnChanged.
--- opts: Name, Description, Placeholder, Default, Height (px, default 150),
---       Monospace (bool), Callback(text) on focus lost.
--- =============================================================================
 function Tab:AddTextArea(opts)
 	opts = opts or {}
 	local areaH = opts.Height or 150
@@ -5762,17 +5785,6 @@ function Tab:AddTextArea(opts)
 	return api
 end
 
--- =============================================================================
--- CreatePanel: a general-purpose, centered, draggable popup window (distinct
--- from CreateSidePanel, which docks to the dock). Use it for editors and tools
--- that need their own space. Returns a panel object:
---   panel:AddTextArea(opts) -> same api as Tab:AddTextArea
---   panel:AddButton{ Name, Color, Callback } -> { SetText }
---   panel:AddRow() -> a horizontal container for buttons (auto-lays-out)
---   panel:Show() / :Hide() / :Toggle() / :IsOpen()
---   panel:SetTitle(text) / :OnClose(fn) / :Destroy()
--- opts: Title, Width (default 420), Height (default 360), Acrylic (bool)
--- =============================================================================
 function Library:CreatePanel(opts)
 	opts = opts or {}
 	local W = opts.Width or 380
@@ -5805,8 +5817,6 @@ function Library:CreatePanel(opts)
 		ZIndex = 2, Parent = root,
 	}, { corner(12) })
 
-	-- Header matches the Target side panel: centered bold title, flat icon
-	-- buttons (no filled background) for pin + close on the right.
 	local header = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, ZIndex = 3, Parent = root,
 	})
@@ -5818,7 +5828,6 @@ function Library:CreatePanel(opts)
 		TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = header,
 	})
 
-	-- Close button (flat, icon only).
 	local closeBtn = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
 		Size = UDim2.fromOffset(28, 28), BackgroundColor3 = THEME.Card,
@@ -5848,8 +5857,6 @@ function Library:CreatePanel(opts)
 		if closeGlyph then tween(closeGlyph, 0.15, { TextColor3 = THEME.SubText }) end
 	end)
 
-	-- Pin button (flat, icon only) — keeps the panel open; purely a user hint
-	-- plus an OnPin callback, like the side panel's pin.
 	local pinned = opts.Pinned == true
 	local pinBtn = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -42, 0.5, 0),
@@ -5887,7 +5894,6 @@ function Library:CreatePanel(opts)
 	pinBtn.MouseEnter:Connect(function() if not pinned and pinImg then tween(pinImg, 0.15, { ImageColor3 = THEME.Text }) end end)
 	pinBtn.MouseLeave:Connect(function() if not pinned and pinImg then tween(pinImg, 0.15, { ImageColor3 = THEME.SubText }) end end)
 
-	-- Body: vertical list the caller fills.
 	local body = new("Frame", {
 		Position = UDim2.new(0, 0, 0, 40),
 		Size = UDim2.new(1, 0, 1, -40),
@@ -5904,7 +5910,6 @@ function Library:CreatePanel(opts)
 	local order = 0
 	local function nextOrder() order += 1 return order end
 
-	-- Dragging by the header (title region, not the buttons).
 	local dragging, dragStart, startPos = false, Vector2.new(), root.Position
 	local dragBtn = new("TextButton", {
 		Size = UDim2.new(1, -90, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false,
@@ -5958,10 +5963,8 @@ function Library:CreatePanel(opts)
 	applyPin()
 	closeBtn.Activated:Connect(function() panel:Hide() end)
 
-	-- Content builders.
 	Library.InstallPanelWidgets(panel, body, nextOrder)
 
-	-- Register so SetAcrylic can update this panel's transparency with the rest.
 	panel.root = root
 	self:_trackScale(root)
 	self._panels = self._panels or {}
