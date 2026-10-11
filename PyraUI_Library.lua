@@ -2072,7 +2072,7 @@ function Library:CreateSidePanel(opts)
 		Position = UDim2.fromOffset(0, 0),
 		Size = UDim2.fromOffset(W, 300),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = Color3.fromRGB(30, 30, 36),
+		BackgroundColor3 = THEME.Glass,
 		BackgroundTransparency = self.IsMobile and SOLID_T or GLASS_PANEL_T,
 		BorderSizePixel = 0,
 		Visible = false,
@@ -2222,9 +2222,9 @@ function Library:CreateSidePanel(opts)
 		local anchor, position, hit
 		if o.Corner == "BottomRight" or o.Corner == "BottomLeft" then
 			local left = o.Corner == "BottomLeft"
-			hit = math.max(28, iconSize + 8)
+			hit = math.max(24, iconSize + 4)
 			anchor = Vector2.new(left and 0 or 1, 1)
-			position = UDim2.new(left and 0 or 1, (left and 1 or -1) * ((o.Index or 1) - 1) * hit, 1, -4)
+			position = UDim2.new(left and 0 or 1, (left and 1 or -1) * (((o.Index or 1) - 1) * hit - 10), 1, 0)
 		else
 			local sideSign = o.Side == "Right" and 1 or -1
 			local offsetX = o.Slot and (50 + (o.Slot - 1) * 32) or 66
@@ -5990,11 +5990,19 @@ function Tab:AddPlayerSearch(opts)
 	local slots = {}
 	local thumbCache = {}
 	local lastListH = -1
+	local selectedText
+	local liveConns = {}
+	local refreshLive
 	local hasStatus = type(opts.RowInfo) == "function"
 	local statusW = hasStatus and 80 or 0
 
 	local function normalize(q)
 		return (q or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+	end
+
+	local function currentQuery()
+		if selectedText and box.Text == selectedText then return "" end
+		return box.Text
 	end
 
 	local function collect(query)
@@ -6022,13 +6030,14 @@ function Tab:AddPlayerSearch(opts)
 		return entries
 	end
 
-	local function loadThumb(slot, p)
+	local function loadThumb(slot, p, attempt)
+		attempt = attempt or 1
 		local cached = thumbCache[p.UserId]
 		if cached then
 			slot.pfp.Image = cached
 			return
 		end
-		slot.pfp.Image = ""
+		if attempt == 1 then slot.pfp.Image = "" end
 		task.spawn(function()
 			local ok, img = pcall(function()
 				return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
@@ -6036,6 +6045,11 @@ function Tab:AddPlayerSearch(opts)
 			if ok and img then
 				thumbCache[p.UserId] = img
 				if slot.player == p and slot.pfp.Parent then slot.pfp.Image = img end
+			elseif attempt < 4 then
+				task.wait(1.5 * attempt)
+				if slot.player == p and slot.pfp.Parent and not win.Destroyed then
+					loadThumb(slot, p, attempt + 1)
+				end
 			end
 		end)
 	end
@@ -6083,8 +6097,12 @@ function Tab:AddPlayerSearch(opts)
 		row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = 1 }) end)
 		row.Activated:Connect(function()
 			local p = slot.player
-			if not p or not p.Parent then return end
+			if not p or not p.Parent then
+				if refreshLive then pcall(refreshLive) end
+				return
+			end
 			selecting = true
+			selectedText = p.DisplayName
 			box.Text = p.DisplayName
 			selecting = false
 			fire(opts.Callback, p)
@@ -6118,6 +6136,11 @@ function Tab:AddPlayerSearch(opts)
 	end
 
 	local function sync(query)
+		local present = {}
+		for _, pl in ipairs(Players:GetPlayers()) do present[pl.UserId] = true end
+		for uid in pairs(thumbCache) do
+			if not present[uid] then thumbCache[uid] = nil end
+		end
 		local entries = collect(normalize(query))
 		local count = math.min(#entries, 20)
 		for i = #slots + 1, count do makeSlot(i) end
@@ -6132,18 +6155,30 @@ function Tab:AddPlayerSearch(opts)
 	end
 	local rebuild = sync
 
-	local function refreshLive()
+	function refreshLive()
 		if not open or selecting then return end
-		local listH = sync(box.Text)
+		local listH = sync(currentQuery())
 		if listH ~= lastListH then
 			lastListH = listH
 			tween(frame, 0.2, { Size = UDim2.new(1, 0, 0, HEADER + listH) })
 		end
 	end
 
-	local function startLive()
+	local function stopLive()
 		liveId += 1
+		for _, c in ipairs(liveConns) do pcall(function() c:Disconnect() end) end
+		table.clear(liveConns)
+	end
+	win:OnDestroy(stopLive)
+
+	local function startLive()
+		stopLive()
 		local id = liveId
+		local function kick()
+			if open and id == liveId and not win.Destroyed then pcall(refreshLive) end
+		end
+		liveConns[1] = Players.PlayerAdded:Connect(function() task.delay(0.1, kick) end)
+		liveConns[2] = Players.PlayerRemoving:Connect(function() task.delay(0.1, kick) end)
 		task.spawn(function()
 			while open and id == liveId and not win.Destroyed do
 				task.wait(0.25)
@@ -6155,7 +6190,7 @@ function Tab:AddPlayerSearch(opts)
 	function api:Open()
 		if open then return end
 		open = true
-		local listH = rebuild(box.Text)
+		local listH = rebuild(currentQuery())
 		lastListH = listH
 		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER + listH) }, Enum.EasingStyle.Quint)
 		tween(boxStroke, 0.2, { Transparency = 0.4 })
@@ -6165,7 +6200,7 @@ function Tab:AddPlayerSearch(opts)
 	function api:Close()
 		if not open then return end
 		open = false
-		liveId += 1
+		stopLive()
 		if box:IsFocused() then box:ReleaseFocus() end
 		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER) }, Enum.EasingStyle.Quint)
 		tween(boxStroke, 0.2, { Transparency = 0.88 })
@@ -6173,6 +6208,7 @@ function Tab:AddPlayerSearch(opts)
 	function api:Toggle() if open then api:Close() else api:Open() end end
 	function api:Clear()
 		selecting = true
+		selectedText = nil
 		box.Text = ""
 		selecting = false
 		if open then api:Close() end
@@ -6191,6 +6227,7 @@ function Tab:AddPlayerSearch(opts)
 	box.Focused:Connect(function()
 		focusGuard = true
 		if box.Text ~= "" then
+			selectedText = nil
 			box.Text = ""
 			rebuild("")
 		end
@@ -6212,7 +6249,7 @@ function Tab:AddPlayerSearch(opts)
 	end)
 	box:GetPropertyChangedSignal("Text"):Connect(function()
 		if open and not selecting then
-			local listH = rebuild(box.Text)
+			local listH = rebuild(currentQuery())
 			lastListH = listH
 			tween(frame, 0.15, { Size = UDim2.new(1, 0, 0, HEADER + listH) })
 		end
