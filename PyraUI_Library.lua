@@ -2243,8 +2243,8 @@ function Library:CreateSidePanel(opts)
 		elseif o.Corner == "BottomRight" then
 			hit = math.max(24, iconSize + 4)
 			anchor = Vector2.new(1, 1)
-			position = UDim2.new(1, 8 - ((o.Index or 1) - 1) * hit, 0, 60)
-			rightReserve = math.max(rightReserve, (o.Index or 1) * hit + 8)
+			position = UDim2.new(1, 13 - ((o.Index or 1) - 1) * hit, 0, 60)
+			rightReserve = math.max(rightReserve, (o.Index or 1) * hit - 5)
 			if userLbl then userLbl.Size = UDim2.new(1, -(66 + rightReserve), 0, 14) end
 		else
 			local sideSign = o.Side == "Right" and 1 or -1
@@ -5068,10 +5068,11 @@ function Tab:AddColorPicker(opts)
 	})
 	hoverable(frame, header)
 
-	local body = new("Frame", {
+	local body = new("CanvasGroup", {
 		Position = UDim2.fromOffset(0, 0),
 		Size = UDim2.new(1, 0, 0, HEADER + BODY),
 		BackgroundTransparency = 1,
+		GroupTransparency = 0,
 		Visible = false,
 		ZIndex = 4,
 		Parent = clipper,
@@ -5124,13 +5125,8 @@ function Tab:AddColorPicker(opts)
 		Parent = hue,
 	}, { round(), stroke(Color3.new(0, 0, 0), 0.5) })
 
-	local svStroke = svCursor:FindFirstChildOfClass("UIStroke")
-	local hueStroke = hueCursor:FindFirstChildOfClass("UIStroke")
-	local function fadeCursors(show)
-		local dur = 0.1
-		if svStroke then tween(svStroke, dur, { Transparency = show and 0 or 1 }) end
-		tween(hueCursor, dur, { BackgroundTransparency = show and 0 or 1 })
-		if hueStroke then tween(hueStroke, dur, { Transparency = show and 0.5 or 1 }) end
+	local function fadeBody(show, dur)
+		tween(body, dur or 0.1, { GroupTransparency = show and 0 or 1 })
 	end
 
 	local api = {}
@@ -5180,7 +5176,8 @@ function Tab:AddColorPicker(opts)
 		playSound(SOUND_CLICK, 0.22, state and 1.05 or 0.95)
 		if state then
 			body.Visible = true
-			fadeCursors(true)
+			body.GroupTransparency = 1
+			fadeBody(true, 0.22)
 		end
 		local function run()
 			if id ~= openId then return end
@@ -5191,7 +5188,7 @@ function Tab:AddColorPicker(opts)
 		if state then
 			run()
 		else
-			fadeCursors(false)
+			fadeBody(false, 0.1)
 			task.delay(0.1, run)
 			task.delay(0.55, function()
 				if id == openId and not isOpen then settle() end
