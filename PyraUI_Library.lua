@@ -1188,6 +1188,8 @@ function Library.new(config)
 		}),
 	})
 	self.NotifyCount = 0
+	self:_trackScale(self.MobileHolder)
+	self:_trackScale(self.NotifyHolder)
 
 	self.Acrylic = { createAcrylic(self.Dock), createAcrylic(self.Panel), createAcrylic(self.Footer) }
 
@@ -1287,6 +1289,7 @@ function Library.new(config)
 	end))
 	table.insert(self.Connections, camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 		if self.Open then tween(self.UIScale, 0.3, { Scale = self:_fitScale() }) end
+		self:_applyScaleToAll(true)
 	end))
 
 	if not self.AcrylicEnabled then
@@ -1311,6 +1314,25 @@ function Library:_fitScale()
 	local h = DOCK_H + GAP + PANEL_H + GAP + FOOTER_H
 	local fit = math.min((vp.X - 28) / WINDOW_W, (vp.Y - 28) / h, 1)
 	return math.max(fit, 0.45) * self.ScaleMultiplier
+end
+
+-- Every secondary GUI (docked panels, popups, HUD monitors, toasts, mobile
+-- buttons) gets its own UIScale that follows the same factor as the main window,
+-- so the UI Scale slider resizes everything, not only the menu.
+function Library:_trackScale(inst)
+	local sc = new("UIScale", { Name = "PyraScale", Scale = self:_fitScale(), Parent = inst })
+	self._scaleTargets = self._scaleTargets or {}
+	table.insert(self._scaleTargets, sc)
+	return sc
+end
+
+function Library:_applyScaleToAll(animate)
+	local s = self:_fitScale()
+	for _, sc in ipairs(self._scaleTargets or {}) do
+		if sc.Parent then
+			if animate then tween(sc, 0.25, { Scale = s }) else sc.Scale = s end
+		end
+	end
 end
 
 function Library:_suppressOtherDof(state)
@@ -1459,6 +1481,7 @@ function Library:_ensureMonitorBar()
 		table.insert(self.Acrylic, self.MonitorAcrylic)
 	end
 	self.MonitorBar = bar
+	self:_trackScale(bar)
 	self.MonitorOrder = {}
 	self.MonitorItems = {}
 	self.MonitorCount = 0
@@ -1520,6 +1543,318 @@ function Library:_refreshMonitorSeparators()
 	end
 end
 
+-- Small icon buttons that live INSIDE an input row, to the right of its text box
+-- (e.g. save / delete next to a config name). Each entry:
+--   { Icon = "rbxassetid://123", Glyph = "S" (fallback text), Callback = function(text) end }
+-- The first entry is the left-most button. The text box shrinks to make room.
+function Library.BuildInlineButtons(frame, box, buttons, getText)
+	local SIZE, GAP, EDGE = 24, 6, 12
+	local n = #buttons
+	box.Position = UDim2.new(1, -(EDGE + n * (SIZE + GAP)), 0.5, 0)
+	for j, b in ipairs(buttons) do
+		local fromRight = EDGE + (n - j) * (SIZE + GAP)
+		local btn = new("TextButton", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -fromRight, 0.5, 0),
+			Size = UDim2.fromOffset(SIZE, SIZE),
+			BackgroundColor3 = THEME.Card,
+			BackgroundTransparency = 0.94,
+			AutoButtonColor = false,
+			Text = "",
+			ZIndex = 8,
+			Parent = frame,
+		}, { corner(6), stroke(Color3.new(1, 1, 1), 0.88) })
+		local img, glyph
+		if type(b.Icon) == "string" and b.Icon ~= "" then
+			-- No tint: the icon keeps whatever colours you drew it with.
+			img = new("ImageLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(15, 15), BackgroundTransparency = 1,
+				Image = b.Icon, ImageTransparency = 0.25, ScaleType = Enum.ScaleType.Fit,
+				ZIndex = 9, Parent = btn,
+			})
+		else
+			glyph = label({
+				Text = b.Glyph or "?", Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.SubText,
+				Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center,
+				ZIndex = 9, Parent = btn,
+			})
+		end
+		btn.MouseEnter:Connect(function()
+			tween(btn, 0.15, { BackgroundTransparency = 0.82 })
+			if img then tween(img, 0.15, { ImageTransparency = 0 }) end
+			if glyph then tween(glyph, 0.15, { TextColor3 = THEME.Text }) end
+		end)
+		btn.MouseLeave:Connect(function()
+			tween(btn, 0.15, { BackgroundTransparency = 0.94 })
+			if img then tween(img, 0.15, { ImageTransparency = 0.25 }) end
+			if glyph then tween(glyph, 0.15, { TextColor3 = THEME.SubText }) end
+		end)
+		btn.Activated:Connect(function()
+			playSound(SOUND_CLICK, 0.3)
+			fire(b.Callback, getText and getText() or "")
+		end)
+	end
+end
+
+-- Shared content builders (text area / input / dropdown / row / grid buttons)
+-- used by both the free popup (CreatePanel) and the docked SidePanel.
+function Library.InstallPanelWidgets(panel, body, nextOrder)
+	function panel:AddTextArea(o)
+		o = o or {}
+		local areaH = o.Height or 180
+		local wrap = new("Frame", {
+			Size = UDim2.new(1, 0, 0, areaH),
+			BackgroundTransparency = 1,
+			LayoutOrder = nextOrder(),
+			ZIndex = 4,
+			Parent = body,
+		})
+		local scroll = new("ScrollingFrame", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
+			BackgroundTransparency = 0.2,
+			BorderSizePixel = 0,
+			ScrollBarThickness = 4,
+			ScrollBarImageTransparency = 0.4,
+			CanvasSize = UDim2.new(0, 0, 0, 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ZIndex = 5,
+			Parent = wrap,
+		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9), pad(8, 10, 8, 10) })
+		local box = new("TextBox", {
+			Size = UDim2.new(1, 0, 1, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			ClearTextOnFocus = false,
+			MultiLine = true, TextWrapped = true, TextEditable = true,
+			Font = o.Monospace and Enum.Font.Code or FONT,
+			TextSize = 13, TextColor3 = THEME.Body,
+			PlaceholderText = o.Placeholder or "",
+			PlaceholderColor3 = THEME.Muted,
+			Text = tostring(o.Default or ""),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			ZIndex = 6, Parent = scroll,
+		})
+		box.FocusLost:Connect(function() fire(o.Callback, box.Text) end)
+		local a = {}
+		function a:GetText() return box.Text end
+		function a:SetText(t) box.Text = tostring(t or "") end
+		return a
+	end
+
+	-- Single-line labelled input inside the panel.
+	function panel:AddInput(o)
+		o = o or {}
+		local wrap = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 34),
+			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
+			BackgroundTransparency = 0.2,
+			BorderSizePixel = 0,
+			LayoutOrder = nextOrder(),
+			ZIndex = 4,
+			Parent = body,
+		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9) })
+		if o.Name then
+			label({
+				Text = o.Name, Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
+				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
+				Size = UDim2.fromOffset(70, 14), ZIndex = 5, Parent = wrap,
+			})
+		end
+		local box = new("TextBox", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.new(1, o.Name and -90 or -20, 1, -8),
+			BackgroundTransparency = 1,
+			ClearTextOnFocus = false,
+			Font = FONT, TextSize = 13, TextColor3 = THEME.Body,
+			PlaceholderText = o.Placeholder or "",
+			PlaceholderColor3 = THEME.Muted,
+			Text = tostring(o.Default or ""),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			ZIndex = 6, Parent = wrap,
+		})
+		box.FocusLost:Connect(function() fire(o.Callback, box.Text) end)
+		local a = {}
+		function a:GetText() return box.Text end
+		function a:SetText(t) box.Text = tostring(t or "") end
+		return a
+	end
+
+	-- Labelled dropdown inside a panel. The list opens INLINE: the row grows and
+	-- pushes the widgets below it down, so it can never be clipped by the panel.
+	function panel:AddDropdown(o)
+		o = o or {}
+		local options = o.Options or {}
+		local selected = o.Default or options[1]
+		local HEAD, ROW, MAXROWS = 34, 26, 5
+		local wrap = new("Frame", {
+			Size = UDim2.new(1, 0, 0, HEAD),
+			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
+			BackgroundTransparency = 0.2,
+			BorderSizePixel = 0,
+			ClipsDescendants = true,
+			LayoutOrder = nextOrder(),
+			ZIndex = 4,
+			Parent = body,
+		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9) })
+		if o.Name then
+			label({
+				Text = o.Name, Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
+				AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 10, 0, HEAD / 2 - 7),
+				Size = UDim2.fromOffset(100, 14), ZIndex = 5, Parent = wrap,
+			})
+		end
+		local current = label({
+			Text = tostring(selected or "--"), Font = FONT, TextSize = 12, TextColor3 = THEME.Body,
+			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -28, 0, HEAD / 2 - 7),
+			Size = UDim2.fromOffset(130, 14), TextXAlignment = Enum.TextXAlignment.Right,
+			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = wrap,
+		})
+		local arrow = label({
+			Text = "\xE2\x96\xBE", Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.SubText,
+			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, HEAD / 2 - 7),
+			Size = UDim2.fromOffset(14, 14), ZIndex = 5, Parent = wrap,
+		})
+		-- Only the header row is clickable (the list below has its own buttons).
+		local btn = new("TextButton", {
+			Size = UDim2.new(1, 0, 0, HEAD), BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = wrap,
+		})
+		local listFrame
+		local api = {}
+		local function closeList()
+			if listFrame then listFrame:Destroy(); listFrame = nil end
+			wrap.Size = UDim2.new(1, 0, 0, HEAD)
+			arrow.Text = "\xE2\x96\xBE"
+		end
+		local function openList()
+			if listFrame then listFrame:Destroy(); listFrame = nil end
+			local h = math.min(#options, MAXROWS) * ROW + 6
+			listFrame = new("ScrollingFrame", {
+				Position = UDim2.fromOffset(0, HEAD),
+				Size = UDim2.new(1, 0, 0, h),
+				BackgroundTransparency = 1, BorderSizePixel = 0,
+				ScrollBarThickness = 3, ScrollBarImageTransparency = 0.4,
+				CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				ZIndex = 5, Parent = wrap,
+			}, { pad(0, 6, 6, 6), new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }) })
+			for i, opt in ipairs(options) do
+				local ob = new("TextButton", {
+					Size = UDim2.new(1, 0, 0, ROW), BackgroundTransparency = 1, LayoutOrder = i,
+					Font = FONT, TextSize = 12,
+					TextColor3 = (opt == selected) and THEME.Text or THEME.SubText,
+					Text = tostring(opt), ZIndex = 6, Parent = listFrame,
+				})
+				ob.Activated:Connect(function() api:Set(opt); closeList() end)
+			end
+			wrap.Size = UDim2.new(1, 0, 0, HEAD + h)
+			arrow.Text = "\xE2\x96\xB4"
+		end
+		btn.Activated:Connect(function()
+			if listFrame then closeList() else openList() end
+		end)
+		function api:Get() return selected end
+		function api:Set(opt) selected = opt; current.Text = tostring(opt); fire(o.Callback, opt) end
+		-- Swap the option list (e.g. after saving or deleting a config).
+		function api:SetOptions(newOptions)
+			options = newOptions or {}
+			local stillThere = false
+			for _, x in ipairs(options) do if x == selected then stillThere = true break end end
+			if not stillThere then
+				selected = options[1]
+				current.Text = tostring(selected or "--")
+			end
+			if listFrame then openList() end
+		end
+		return api
+	end
+
+	function panel:AddRow()
+		local row = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 32),
+			BackgroundTransparency = 1,
+			LayoutOrder = nextOrder(),
+			ZIndex = 4,
+			Parent = body,
+		}, {
+			new("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+		})
+		local rowApi = {}
+		local rord = 0
+		function rowApi:AddButton(o)
+			o = o or {}
+			rord += 1
+			local b = new("TextButton", {
+				Size = UDim2.fromOffset(0, 28),
+				AutomaticSize = Enum.AutomaticSize.X,
+				BackgroundColor3 = o.Color or THEME.Switch,
+				BackgroundTransparency = 0.12,
+				Text = o.Name or "Button",
+				Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.Text,
+				AutoButtonColor = true, LayoutOrder = rord, ZIndex = 5, Parent = row,
+			}, { corner(7), pad(0, 14, 0, 14) })
+			b.Activated:Connect(function() playSound(SOUND_CLICK, 0.3) fire(o.Callback) end)
+			local ba = {}
+			function ba:SetText(t) b.Text = tostring(t) end
+			return ba
+		end
+		return rowApi
+	end
+
+	function panel:AddButton(o)
+		local row = self:AddRow()
+		return row:AddButton(o)
+	end
+
+	-- Grid of equal-width buttons, `cols` per row (e.g. 2 for a 2x2). Rows grow
+	-- automatically as buttons are added.
+	function panel:AddGrid(cols)
+		cols = math.max(1, cols or 2)
+		local wrap = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			LayoutOrder = nextOrder(),
+			ZIndex = 4,
+			Parent = body,
+		}, {
+			new("UIGridLayout", {
+				CellSize = UDim2.new(1 / cols, -5, 0, 30),
+				CellPadding = UDim2.fromOffset(6, 6),
+				FillDirectionMaxCells = cols,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			}),
+		})
+		local gridApi = {}
+		local gord = 0
+		function gridApi:AddButton(o)
+			o = o or {}
+			gord += 1
+			local b = new("TextButton", {
+				BackgroundColor3 = o.Color or THEME.Switch,
+				BackgroundTransparency = 0.12,
+				Text = o.Name or "Button",
+				Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.Text,
+				AutoButtonColor = true, LayoutOrder = gord, ZIndex = 5, Parent = wrap,
+			}, { corner(7) })
+			b.Activated:Connect(function() playSound(SOUND_CLICK, 0.3) fire(o.Callback) end)
+			local ba = {}
+			function ba:SetText(t) b.Text = tostring(t) end
+			return ba
+		end
+		return gridApi
+	end
+
+end
+
 function Library:CreateSidePanel(opts)
 	opts = opts or {}
 	local W = opts.Width or 230
@@ -1542,6 +1877,10 @@ function Library:CreateSidePanel(opts)
 		local a = createAcrylic(root)
 		table.insert(self.Acrylic, a)
 	end
+	-- Follow the glass toggle from the start (opaque when blur is off).
+	if not self.AcrylicEnabled then root.BackgroundTransparency = SOLID_T end
+	-- ...and the UI Scale slider.
+	self:_trackScale(root)
 
 	new("ImageLabel", {
 		Name = "Noise", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
@@ -1625,6 +1964,16 @@ function Library:CreateSidePanel(opts)
 	avatar.Parent = avatarWrap
 	avatar.AnchorPoint = Vector2.new(0.5, 0)
 	avatar.Position = UDim2.new(0.5, 0, 0, 4)
+
+	-- Editor mode: a docked panel that hosts form widgets (text area, inputs,
+	-- dropdowns, buttons) instead of the avatar + stat rows.
+	if opts.Editor then
+		avatarWrap:Destroy()
+		local lay = body:FindFirstChildOfClass("UIListLayout")
+		if lay then lay.Padding = UDim.new(0, 8) end
+		local ord = 0
+		Library.InstallPanelWidgets(panel, body, function() ord += 1 return ord end)
+	end
 
 	local rows = {}
 	local function addStat(key)
@@ -1764,6 +2113,17 @@ function Library:CreateSidePanel(opts)
 	end
 
 	function panel:IsDetached() return detached end
+	function panel:IsShown() return shown end
+	-- Open/close from a button. Also closes a panel that was dragged off the dock.
+	function panel:Toggle()
+		if shown or detached then
+			detached = false
+			shown = true
+			panel:Hide()
+		else
+			panel:Show()
+		end
+	end
 	function panel:IsPinned() return pinned end
 	local pinSel = type(ICONS.Pin_Selected) == "string" and ICONS.Pin_Selected ~= ""
 	local function applyPin()
@@ -1834,7 +2194,7 @@ function Library:CreateSidePanel(opts)
 			})
 		end
 		if on then
-			ghost.Size = UDim2.fromOffset(W, math.max(60, root.AbsoluteSize.Y))
+			ghost.Size = UDim2.fromOffset(math.max(60, root.AbsoluteSize.X), math.max(60, root.AbsoluteSize.Y))
 			ghost.Visible = true
 			moveAbs(ghost, dockTopLeft())
 			ghost.BackgroundColor3 = c
@@ -2003,6 +2363,7 @@ end
 function Library:SetScaleMultiplier(multiplier)
 	self.ScaleMultiplier = math.clamp(tonumber(multiplier) or 1, 0.5, 1.5)
 	if self.Open then tween(self.UIScale, 0.25, { Scale = self:_fitScale() }) end
+	self:_applyScaleToAll(true)
 end
 
 function Library:AddMobileButton(opts)
@@ -2112,7 +2473,15 @@ function Library:SetAcrylic(state)
 	if self.MonitorBar then
 		tween(self.MonitorBar, 0.3, { BackgroundTransparency = self.AcrylicEnabled and GLASS_DOCK_T or SOLID_T })
 	end
-	-- Every CreatePanel popup (e.g. the Fast Flags editor) follows it too.
+	-- Docked side panels (e.g. the Fast Flags editor) follow it too.
+	if self.SidePanels then
+		for _, p in ipairs(self.SidePanels) do
+			if p and p.Root then
+				tween(p.Root, 0.3, { BackgroundTransparency = self.AcrylicEnabled and GLASS_PANEL_T or SOLID_T })
+			end
+		end
+	end
+	-- Every CreatePanel popup follows it too.
 	if self._panels then
 		for _, p in ipairs(self._panels) do
 			if p and p.root then
@@ -4160,6 +4529,7 @@ function Tab:AddDropdown(opts)
 		end
 	end
 
+	local function buildOptions()
 	for i, option in ipairs(options) do
 		local b = new("TextButton", {
 			Size = UDim2.new(1, 0, 0, OPTION_H),
@@ -4200,6 +4570,8 @@ function Tab:AddDropdown(opts)
 		end)
 		table.insert(items, { option = option, label = l, dot = dot, num = num })
 	end
+	end
+	buildOptions()
 
 	local fullHeight = HEADER + #options * (OPTION_H + OPTION_GAP) + 8
 
@@ -4220,12 +4592,32 @@ function Tab:AddDropdown(opts)
 		end
 	end
 	function api:Set(option)
-		if option == selected then return end
+		-- AlwaysFire: a "pick one to run" dropdown (e.g. Load Config) must act on
+		-- every click, even when the clicked option is already the selected one.
+		if option == selected and not opts.AlwaysFire then return end
 		selected = option
 		refresh(false)
 		fire(opts.Callback, selected)
 	end
 	function api:Get() return selected end
+	-- Change the shown selection WITHOUT firing the callback.
+	function api:SetSelected(option) selected = option; refresh(true) end
+	-- Replace the option list at runtime (e.g. after saving a new config).
+	function api:SetOptions(newOptions)
+		options = newOptions or {}
+		for _, child in ipairs(list:GetChildren()) do
+			if child:IsA("TextButton") then child:Destroy() end
+		end
+		table.clear(items)
+		buildOptions()
+		fullHeight = HEADER + #options * (OPTION_H + OPTION_GAP) + 8
+		list.Size = UDim2.new(1, 0, 0, #options * (OPTION_H + OPTION_GAP) + 8)
+		if isOpen then frame.Size = UDim2.new(1, 0, 0, fullHeight) end
+		local stillThere = false
+		for _, o in ipairs(options) do if o == selected then stillThere = true break end end
+		if not stillThere then selected = nil end
+		refresh(true)
+	end
 
 	header.Activated:Connect(function() api:SetOpen(not isOpen) end)
 	refresh(true)
@@ -4907,7 +5299,9 @@ function Tab:AddInput(opts)
 	local hasPicker = type(opts.PickerSource) == "function"
 	local frame = elementFrame(self, opts.Description and 50 or 38)
 	frame.ClipsDescendants = true
-	titleBlock(frame, opts.Name or "Input", opts.Description, 160)
+	-- Inline icon buttons (e.g. save / delete) take 30px each beside the box.
+	local btnCount = (type(opts.Buttons) == "table" and not isSearch) and #opts.Buttons or 0
+	titleBlock(frame, opts.Name or "Input", opts.Description, 160 + btnCount * 30)
 	self.Window:_index(self, frame, opts.Name or "Input", opts.Description)
 
 	local COLLAPSED, EXPANDED = 28, 170
@@ -4934,6 +5328,11 @@ function Tab:AddInput(opts)
 	}, { corner(6), stroke(Color3.new(1, 1, 1), isSearch and 1 or 0.88), pad(0, isSearch and 30 or 8, 0, 8) })
 	local boxStroke = box:FindFirstChildOfClass("UIStroke")
 	hoverable(frame, frame)
+
+	-- Optional inline icon buttons right next to the box (see BuildInlineButtons).
+	if type(opts.Buttons) == "table" and #opts.Buttons > 0 and not isSearch then
+		Library.BuildInlineButtons(frame, box, opts.Buttons, function() return box.Text end)
+	end
 
 	local searchBtn, searchImg, searchGlyph
 	if isSearch then
@@ -5558,243 +5957,11 @@ function Library:CreatePanel(opts)
 	closeBtn.Activated:Connect(function() panel:Hide() end)
 
 	-- Content builders.
-	function panel:AddTextArea(o)
-		o = o or {}
-		local areaH = o.Height or 180
-		local wrap = new("Frame", {
-			Size = UDim2.new(1, 0, 0, areaH),
-			BackgroundTransparency = 1,
-			LayoutOrder = nextOrder(),
-			ZIndex = 4,
-			Parent = body,
-		})
-		local scroll = new("ScrollingFrame", {
-			Size = UDim2.fromScale(1, 1),
-			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
-			BackgroundTransparency = 0.2,
-			BorderSizePixel = 0,
-			ScrollBarThickness = 4,
-			ScrollBarImageTransparency = 0.4,
-			CanvasSize = UDim2.new(0, 0, 0, 0),
-			AutomaticCanvasSize = Enum.AutomaticSize.Y,
-			ZIndex = 5,
-			Parent = wrap,
-		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9), pad(8, 10, 8, 10) })
-		local box = new("TextBox", {
-			Size = UDim2.new(1, 0, 1, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundTransparency = 1,
-			ClearTextOnFocus = false,
-			MultiLine = true, TextWrapped = true, TextEditable = true,
-			Font = o.Monospace and Enum.Font.Code or FONT,
-			TextSize = 13, TextColor3 = THEME.Body,
-			PlaceholderText = o.Placeholder or "",
-			PlaceholderColor3 = THEME.Muted,
-			Text = tostring(o.Default or ""),
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			ZIndex = 6, Parent = scroll,
-		})
-		box.FocusLost:Connect(function() fire(o.Callback, box.Text) end)
-		local a = {}
-		function a:GetText() return box.Text end
-		function a:SetText(t) box.Text = tostring(t or "") end
-		return a
-	end
-
-	-- Single-line labelled input inside the panel.
-	function panel:AddInput(o)
-		o = o or {}
-		local wrap = new("Frame", {
-			Size = UDim2.new(1, 0, 0, 34),
-			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
-			BackgroundTransparency = 0.2,
-			BorderSizePixel = 0,
-			LayoutOrder = nextOrder(),
-			ZIndex = 4,
-			Parent = body,
-		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9) })
-		if o.Name then
-			label({
-				Text = o.Name, Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
-				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
-				Size = UDim2.fromOffset(70, 14), ZIndex = 5, Parent = wrap,
-			})
-		end
-		local box = new("TextBox", {
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -10, 0.5, 0),
-			Size = UDim2.new(1, o.Name and -90 or -20, 1, -8),
-			BackgroundTransparency = 1,
-			ClearTextOnFocus = false,
-			Font = FONT, TextSize = 13, TextColor3 = THEME.Body,
-			PlaceholderText = o.Placeholder or "",
-			PlaceholderColor3 = THEME.Muted,
-			Text = tostring(o.Default or ""),
-			TextXAlignment = Enum.TextXAlignment.Right,
-			ZIndex = 6, Parent = wrap,
-		})
-		box.FocusLost:Connect(function() fire(o.Callback, box.Text) end)
-		local a = {}
-		function a:GetText() return box.Text end
-		function a:SetText(t) box.Text = tostring(t or "") end
-		return a
-	end
-
-	-- Simple labelled dropdown inside the panel.
-	function panel:AddDropdown(o)
-		o = o or {}
-		local options = o.Options or {}
-		local selected = o.Default or options[1]
-		local wrap = new("Frame", {
-			Size = UDim2.new(1, 0, 0, 34),
-			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
-			BackgroundTransparency = 0.2,
-			BorderSizePixel = 0,
-			LayoutOrder = nextOrder(),
-			ZIndex = 4,
-			Parent = body,
-		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9) })
-		if o.Name then
-			label({
-				Text = o.Name, Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
-				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
-				Size = UDim2.fromOffset(100, 14), ZIndex = 5, Parent = wrap,
-			})
-		end
-		local current = label({
-			Text = tostring(selected or "--"), Font = FONT, TextSize = 12, TextColor3 = THEME.Body,
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -28, 0.5, 0),
-			Size = UDim2.fromOffset(120, 14), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 5, Parent = wrap,
-		})
-		local arrow = label({
-			Text = "▾", Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.SubText,
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
-			Size = UDim2.fromOffset(14, 14), ZIndex = 5, Parent = wrap,
-		})
-		local listOpen = false
-		local listFrame
-		local btn = new("TextButton", {
-			Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = wrap,
-		})
-		local api = {}
-		local function closeList()
-			if listFrame then listFrame:Destroy(); listFrame = nil end
-			listOpen = false
-		end
-		btn.Activated:Connect(function()
-			if listOpen then closeList(); return end
-			listOpen = true
-			listFrame = new("Frame", {
-				Position = UDim2.new(0, 0, 1, 2), Size = UDim2.new(1, 0, 0, 0),
-				AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = Color3.fromRGB(18, 18, 24),
-				BorderSizePixel = 0, ZIndex = 20, Parent = wrap,
-			}, { corner(7), stroke(Color3.new(1,1,1), 0.86),
-				new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }) })
-			for _, opt in ipairs(options) do
-				local ob = new("TextButton", {
-					Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1,
-					Font = FONT, TextSize = 12, TextColor3 = THEME.Body, Text = tostring(opt),
-					ZIndex = 21, Parent = listFrame,
-				})
-				ob.Activated:Connect(function()
-					selected = opt
-					current.Text = tostring(opt)
-					closeList()
-					fire(o.Callback, opt)
-				end)
-			end
-		end)
-		function api:Get() return selected end
-		function api:Set(opt) selected = opt; current.Text = tostring(opt); fire(o.Callback, opt) end
-		function api:SetOptions(opts) options = opts or {} end
-		return api
-	end
-
-	function panel:AddRow()
-		local row = new("Frame", {
-			Size = UDim2.new(1, 0, 0, 32),
-			BackgroundTransparency = 1,
-			LayoutOrder = nextOrder(),
-			ZIndex = 4,
-			Parent = body,
-		}, {
-			new("UIListLayout", {
-				FillDirection = Enum.FillDirection.Horizontal,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder,
-			}),
-		})
-		local rowApi = {}
-		local rord = 0
-		function rowApi:AddButton(o)
-			o = o or {}
-			rord += 1
-			local b = new("TextButton", {
-				Size = UDim2.fromOffset(0, 28),
-				AutomaticSize = Enum.AutomaticSize.X,
-				BackgroundColor3 = o.Color or THEME.Switch,
-				BackgroundTransparency = 0.12,
-				Text = o.Name or "Button",
-				Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.Text,
-				AutoButtonColor = true, LayoutOrder = rord, ZIndex = 5, Parent = row,
-			}, { corner(7), pad(0, 14, 0, 14) })
-			b.Activated:Connect(function() playSound(SOUND_CLICK, 0.3) fire(o.Callback) end)
-			local ba = {}
-			function ba:SetText(t) b.Text = tostring(t) end
-			return ba
-		end
-		return rowApi
-	end
-
-	function panel:AddButton(o)
-		local row = self:AddRow()
-		return row:AddButton(o)
-	end
-
-	-- Grid of equal-width buttons, `cols` per row (e.g. 2 for a 2x2). Rows grow
-	-- automatically as buttons are added.
-	function panel:AddGrid(cols)
-		cols = math.max(1, cols or 2)
-		local wrap = new("Frame", {
-			Size = UDim2.new(1, 0, 0, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundTransparency = 1,
-			LayoutOrder = nextOrder(),
-			ZIndex = 4,
-			Parent = body,
-		}, {
-			new("UIGridLayout", {
-				CellSize = UDim2.new(1 / cols, -5, 0, 30),
-				CellPadding = UDim2.fromOffset(6, 6),
-				FillDirectionMaxCells = cols,
-				SortOrder = Enum.SortOrder.LayoutOrder,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			}),
-		})
-		local gridApi = {}
-		local gord = 0
-		function gridApi:AddButton(o)
-			o = o or {}
-			gord += 1
-			local b = new("TextButton", {
-				BackgroundColor3 = o.Color or THEME.Switch,
-				BackgroundTransparency = 0.12,
-				Text = o.Name or "Button",
-				Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.Text,
-				AutoButtonColor = true, LayoutOrder = gord, ZIndex = 5, Parent = wrap,
-			}, { corner(7) })
-			b.Activated:Connect(function() playSound(SOUND_CLICK, 0.3) fire(o.Callback) end)
-			local ba = {}
-			function ba:SetText(t) b.Text = tostring(t) end
-			return ba
-		end
-		return gridApi
-	end
+	Library.InstallPanelWidgets(panel, body, nextOrder)
 
 	-- Register so SetAcrylic can update this panel's transparency with the rest.
 	panel.root = root
+	self:_trackScale(root)
 	self._panels = self._panels or {}
 	table.insert(self._panels, panel)
 	if not self.AcrylicEnabled then
