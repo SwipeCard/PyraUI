@@ -2072,7 +2072,7 @@ function Library:CreateSidePanel(opts)
 		Position = UDim2.fromOffset(0, 0),
 		Size = UDim2.fromOffset(W, 300),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = THEME.Glass,
+		BackgroundColor3 = Color3.fromRGB(30, 30, 36),
 		BackgroundTransparency = self.IsMobile and SOLID_T or GLASS_PANEL_T,
 		BorderSizePixel = 0,
 		Visible = false,
@@ -2220,10 +2220,11 @@ function Library:CreateSidePanel(opts)
 		local iconSize = o.IconSize or 20
 		local on = false
 		local anchor, position, hit
-		if o.Corner == "BottomRight" then
-			hit = 28
-			anchor = Vector2.new(1, 1)
-			position = UDim2.new(1, -((o.Index or 1) - 1) * 28, 1, -4)
+		if o.Corner == "BottomRight" or o.Corner == "BottomLeft" then
+			local left = o.Corner == "BottomLeft"
+			hit = math.max(28, iconSize + 8)
+			anchor = Vector2.new(left and 0 or 1, 1)
+			position = UDim2.new(left and 0 or 1, (left and 1 or -1) * ((o.Index or 1) - 1) * hit, 1, -4)
 		else
 			local sideSign = o.Side == "Right" and 1 or -1
 			local offsetX = o.Slot and (50 + (o.Slot - 1) * 32) or 66
@@ -4974,7 +4975,7 @@ end
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
 	local mid = height / 2
-	local reach = opts.Reach or 11
+	local reach = opts.Reach or 3
 	local rightInset = opts.RightInset
 	local function bar(x, y, w, h)
 		return new("Frame", {
@@ -5956,6 +5957,7 @@ function Tab:AddPlayerSearch(opts)
 		Position = UDim2.new(0, 10, 0, HEADER),
 		Size = UDim2.new(1, -20, 0, 0),
 		BackgroundTransparency = 1,
+		Active = true,
 		ZIndex = 5,
 		Parent = frame,
 	}, {
@@ -5965,11 +5967,55 @@ function Tab:AddPlayerSearch(opts)
 
 	local open = false
 	local selecting = false
+	local hovered = false
+	local lastPress = 0
+	local gapClick = false
 	local api = {}
+
+	listHolder.InputBegan:Connect(function(input)
+		if not isPress(input) then return end
+		gapClick = true
+		task.delay(0.3, function() gapClick = false end)
+	end)
 
 	local rowMap = {}
 	local liveId = 0
 	local win = self.Window
+	local GuiService = game:GetService("GuiService")
+	local hoverRow
+
+	local function paintHover(row)
+		if hoverRow == row then return end
+		if hoverRow and hoverRow.Parent then tween(hoverRow, 0.12, { BackgroundTransparency = 1 }) end
+		hoverRow = row
+		hovered = row ~= nil
+		if row then tween(row, 0.12, { BackgroundTransparency = 0.9 }) end
+	end
+
+	local function syncHover()
+		if not open or not UserInputService.MouseEnabled then
+			paintHover(nil)
+			return
+		end
+		local m = UserInputService:GetMouseLocation()
+		local sg = listHolder:FindFirstAncestorOfClass("ScreenGui")
+		local inset = (sg and sg.IgnoreGuiInset) and Vector2.zero or GuiService:GetGuiInset()
+		local x, y = m.X - inset.X, m.Y - inset.Y
+		local fp, fs = frame.AbsolutePosition, frame.AbsoluteSize
+		local found
+		if x >= fp.X and x <= fp.X + fs.X and y >= fp.Y and y <= fp.Y + fs.Y then
+			for _, c in ipairs(listHolder:GetChildren()) do
+				if c:IsA("TextButton") then
+					local pos, size = c.AbsolutePosition, c.AbsoluteSize
+					if x >= pos.X and x <= pos.X + size.X and y >= pos.Y and y <= pos.Y + size.Y then
+						found = c
+						break
+					end
+				end
+			end
+		end
+		paintHover(found)
+	end
 
 	local function normalize(q)
 		return (q or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
@@ -6005,6 +6051,8 @@ function Tab:AddPlayerSearch(opts)
 			if c:IsA("TextButton") then c:Destroy() end
 		end
 		rowMap = {}
+		hoverRow = nil
+		hovered = false
 		local entries = collect(normalize(query))
 		local shown = 0
 		for _, entry in ipairs(entries) do
@@ -6055,8 +6103,13 @@ function Tab:AddPlayerSearch(opts)
 				})
 			end
 			rowMap[p] = { row = row, status = statusLabel, text = entry.text, color = entry.color }
-			row.MouseEnter:Connect(function() tween(row, 0.12, { BackgroundTransparency = 0.9 }) end)
-			row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = 1 }) end)
+			row.MouseEnter:Connect(function() paintHover(row) end)
+			row.MouseLeave:Connect(function()
+				if hoverRow == row then paintHover(nil) end
+			end)
+			row.InputBegan:Connect(function(input)
+				if isPress(input) then lastPress = os.clock() end
+			end)
 			row.Activated:Connect(function()
 				selecting = true
 				box.Text = p.DisplayName
@@ -6068,11 +6121,13 @@ function Tab:AddPlayerSearch(opts)
 
 		local listH = shown > 0 and (shown * (ROW_H + 4) + 10) or 0
 		listHolder.Size = UDim2.new(1, -20, 0, math.max(listH, 0))
+		task.delay(0.05, syncHover)
 		return listH
 	end
 
 	local function refreshLive()
 		if not open or selecting then return end
+		syncHover()
 		local entries = collect(normalize(box.Text))
 		local count = math.min(#entries, 20)
 		local needRebuild = false
@@ -6089,21 +6144,30 @@ function Tab:AddPlayerSearch(opts)
 				end
 			end
 		end
+		local busy = hovered
+			or (os.clock() - lastPress) < 0.4
+			or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
 		if needRebuild then
+			if busy then return end
 			local listH = rebuild(box.Text)
 			tween(frame, 0.2, { Size = UDim2.new(1, 0, 0, HEADER + listH) })
 			return
 		end
+		local moved = false
 		for i = 1, count do
 			local e = entries[i]
 			local rm = rowMap[e.p]
-			rm.row.LayoutOrder = i
+			if not busy and rm.row.LayoutOrder ~= i then
+				rm.row.LayoutOrder = i
+				moved = true
+			end
 			if rm.status and (rm.text ~= e.text or rm.color ~= e.color) then
 				rm.text, rm.color = e.text, e.color
 				rm.status.Text = e.text
 				tween(rm.status, 0.2, { TextColor3 = e.color or THEME.SubText })
 			end
 		end
+		if moved then task.delay(0.05, syncHover) end
 	end
 	local function startLive()
 		liveId += 1
@@ -6163,7 +6227,7 @@ function Tab:AddPlayerSearch(opts)
 
 	box.FocusLost:Connect(function()
 		task.delay(0.05, function()
-			if selecting then return end
+			if selecting or gapClick then return end
 			if open and not box:IsFocused() then api:Close() end
 		end)
 	end)
