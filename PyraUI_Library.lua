@@ -2217,14 +2217,24 @@ function Library:CreateSidePanel(opts)
 	function panel:AddAvatarButton(o)
 		if opts.Editor then return nil end
 		o = o or {}
-		local sideSign = o.Side == "Right" and 1 or -1
-		local offsetX = o.Slot and (50 + (o.Slot - 1) * 32) or 66
 		local iconSize = o.IconSize or 20
 		local on = false
+		local anchor, position, hit
+		if o.Corner == "BottomRight" then
+			hit = 28
+			anchor = Vector2.new(1, 1)
+			position = UDim2.new(1, -((o.Index or 1) - 1) * 28, 1, -4)
+		else
+			local sideSign = o.Side == "Right" and 1 or -1
+			local offsetX = o.Slot and (50 + (o.Slot - 1) * 32) or 66
+			hit = 32
+			anchor = Vector2.new(0.5, 0.5)
+			position = UDim2.new(0.5, sideSign * offsetX, 0, 36)
+		end
 		local btn = new("TextButton", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, sideSign * offsetX, 0, 36),
-			Size = UDim2.fromOffset(32, 32),
+			AnchorPoint = anchor,
+			Position = position,
+			Size = UDim2.fromOffset(hit, hit),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Text = "",
@@ -4971,7 +4981,7 @@ function Library.BuildSubMarker(frame, height)
 		}, { corner(1) })
 	end
 	bar(22, 1, 2, mid)
-	bar(22, mid - 1, 30, 2)
+	bar(22, mid - 1, 150, 2)
 end
 
 function Tab:AddColorPicker(opts)
