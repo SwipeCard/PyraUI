@@ -1083,7 +1083,7 @@ function Library.new(config)
 	self.StatusColor = (typeof(config.StatusColor) == "Color3") and config.StatusColor or STATUS_GREEN
 	self.StatusText = config.Status or "Manual"
 	local statusHex = self.StatusColor:ToHex()
-	self.StatusValue = chip("STATUS", string.format('<font color="#%s">●</font> %s', statusHex, self.StatusText))
+	self.StatusValue = chip(config.StatusLabel or "STATUS", string.format('<font color="#%s">●</font> %s', statusHex, self.StatusText))
 	self.ExpiryValue = chip("EXPIRES", config.Expiry or "12/21/2036")
 	local pingValue = chip("PING", "-- ms")
 	local fpsValue = chip("FPS", "--")
