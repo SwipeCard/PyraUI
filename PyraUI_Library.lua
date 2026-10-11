@@ -1265,7 +1265,12 @@ function Library.new(config)
 		self.ParallaxVelocity += accel * step
 		self.Parallax += self.ParallaxVelocity * step
 
-		self.Base = self.Base:Lerp(self.TargetPosition, math.clamp(dt * 18, 0, 1))
+		-- Instant while dragging (no smoothing/lag); lerp only for parallax settle.
+		if dragging then
+			self.Base = self.TargetPosition
+		else
+			self.Base = self.Base:Lerp(self.TargetPosition, math.clamp(dt * 18, 0, 1))
+		end
 		local final = self.Base + UDim2.fromOffset(self.Parallax.X, self.Parallax.Y)
 		if final ~= self.Holder.Position then self.Holder.Position = final end
 
@@ -2103,6 +2108,18 @@ function Library:SetAcrylic(state)
 	tween(self.Dock, 0.3, { BackgroundTransparency = dockT })
 	tween(self.Panel, 0.3, { BackgroundTransparency = panelT })
 	tween(self.Footer, 0.3, { BackgroundTransparency = dockT })
+	-- Monitor bar follows the glass setting too.
+	if self.MonitorBar then
+		tween(self.MonitorBar, 0.3, { BackgroundTransparency = self.AcrylicEnabled and GLASS_DOCK_T or SOLID_T })
+	end
+	-- Every CreatePanel popup (e.g. the Fast Flags editor) follows it too.
+	if self._panels then
+		for _, p in ipairs(self._panels) do
+			if p and p.root then
+				tween(p.root, 0.3, { BackgroundTransparency = self.AcrylicEnabled and GLASS_PANEL_T or SOLID_T })
+			end
+		end
+	end
 	if self.Open then self:_suppressOtherDof(self.AcrylicEnabled) end
 end
 
@@ -5624,6 +5641,76 @@ function Library:CreatePanel(opts)
 		return a
 	end
 
+	-- Simple labelled dropdown inside the panel.
+	function panel:AddDropdown(o)
+		o = o or {}
+		local options = o.Options or {}
+		local selected = o.Default or options[1]
+		local wrap = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 34),
+			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
+			BackgroundTransparency = 0.2,
+			BorderSizePixel = 0,
+			LayoutOrder = nextOrder(),
+			ZIndex = 4,
+			Parent = body,
+		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9) })
+		if o.Name then
+			label({
+				Text = o.Name, Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
+				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
+				Size = UDim2.fromOffset(100, 14), ZIndex = 5, Parent = wrap,
+			})
+		end
+		local current = label({
+			Text = tostring(selected or "--"), Font = FONT, TextSize = 12, TextColor3 = THEME.Body,
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -28, 0.5, 0),
+			Size = UDim2.fromOffset(120, 14), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 5, Parent = wrap,
+		})
+		local arrow = label({
+			Text = "▾", Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.SubText,
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(14, 14), ZIndex = 5, Parent = wrap,
+		})
+		local listOpen = false
+		local listFrame
+		local btn = new("TextButton", {
+			Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = wrap,
+		})
+		local api = {}
+		local function closeList()
+			if listFrame then listFrame:Destroy(); listFrame = nil end
+			listOpen = false
+		end
+		btn.Activated:Connect(function()
+			if listOpen then closeList(); return end
+			listOpen = true
+			listFrame = new("Frame", {
+				Position = UDim2.new(0, 0, 1, 2), Size = UDim2.new(1, 0, 0, 0),
+				AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = Color3.fromRGB(18, 18, 24),
+				BorderSizePixel = 0, ZIndex = 20, Parent = wrap,
+			}, { corner(7), stroke(Color3.new(1,1,1), 0.86),
+				new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }) })
+			for _, opt in ipairs(options) do
+				local ob = new("TextButton", {
+					Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1,
+					Font = FONT, TextSize = 12, TextColor3 = THEME.Body, Text = tostring(opt),
+					ZIndex = 21, Parent = listFrame,
+				})
+				ob.Activated:Connect(function()
+					selected = opt
+					current.Text = tostring(opt)
+					closeList()
+					fire(o.Callback, opt)
+				end)
+			end
+		end)
+		function api:Get() return selected end
+		function api:Set(opt) selected = opt; current.Text = tostring(opt); fire(o.Callback, opt) end
+		function api:SetOptions(opts) options = opts or {} end
+		return api
+	end
+
 	function panel:AddRow()
 		local row = new("Frame", {
 			Size = UDim2.new(1, 0, 0, 32),
@@ -5704,6 +5791,14 @@ function Library:CreatePanel(opts)
 			return ba
 		end
 		return gridApi
+	end
+
+	-- Register so SetAcrylic can update this panel's transparency with the rest.
+	panel.root = root
+	self._panels = self._panels or {}
+	table.insert(self._panels, panel)
+	if not self.AcrylicEnabled then
+		root.BackgroundTransparency = SOLID_T
 	end
 
 	self:OnDestroy(function() panel:Destroy() end)
