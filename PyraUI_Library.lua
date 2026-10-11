@@ -2198,8 +2198,22 @@ function Library:CreateSidePanel(opts)
 		Parent = body,
 	})
 	avatar.Parent = avatarWrap
-	avatar.AnchorPoint = Vector2.new(0.5, 0)
-	avatar.Position = UDim2.new(0.5, 0, 0, 4)
+	avatar.AnchorPoint = Vector2.new(0, 0)
+	avatar.Position = UDim2.new(0, 0, 0, 4)
+
+	local nameLbl, userLbl
+	if not opts.Editor then
+		nameLbl = label({
+			Text = "No Target", Font = FONT_BOLD, TextSize = 14, TextColor3 = THEME.Text,
+			Position = UDim2.fromOffset(76, 6), Size = UDim2.new(1, -76, 0, 18),
+			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = avatarWrap,
+		})
+		userLbl = label({
+			Text = "", Font = FONT_MEDIUM, TextSize = 11, TextColor3 = THEME.SubText,
+			Position = UDim2.fromOffset(76, 24), Size = UDim2.new(1, -76, 0, 14),
+			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = avatarWrap,
+		})
+	end
 
 	if opts.Editor then
 		avatarWrap:Destroy()
@@ -2220,11 +2234,14 @@ function Library:CreateSidePanel(opts)
 		local iconSize = o.IconSize or 20
 		local on = false
 		local anchor, position, hit
-		if o.Corner == "BottomRight" or o.Corner == "BottomLeft" then
-			local left = o.Corner == "BottomLeft"
+		if o.Corner == "BottomLeft" then
 			hit = math.max(24, iconSize + 4)
-			anchor = Vector2.new(left and 0 or 1, 1)
-			position = UDim2.new(left and 0 or 1, (left and 1 or -1) * (((o.Index or 1) - 1) * hit - 10), 1, 0)
+			anchor = Vector2.new(0, 1)
+			position = UDim2.fromOffset(74 + ((o.Index or 1) - 1) * hit, 70)
+		elseif o.Corner == "BottomRight" then
+			hit = math.max(24, iconSize + 4)
+			anchor = Vector2.new(1, 1)
+			position = UDim2.new(1, -(((o.Index or 1) - 1) * hit - 10), 1, 0)
 		else
 			local sideSign = o.Side == "Right" and 1 or -1
 			local offsetX = o.Slot and (50 + (o.Slot - 1) * 32) or 66
@@ -2280,7 +2297,7 @@ function Library:CreateSidePanel(opts)
 		if clearBtn or opts.Editor then return end
 		clearBtn = new("TextButton", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 30, 0, 8),
+			Position = UDim2.fromOffset(60, 8),
 			Size = UDim2.fromOffset(22, 22),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
@@ -2354,8 +2371,14 @@ function Library:CreateSidePanel(opts)
 			if ok then avatar.Image = img end
 		end)
 	end
-	function panel:SetTitle(t) title.Text = t end
+	function panel:SetTitle(t)
+		if nameLbl then nameLbl.Text = tostring(t) else title.Text = t end
+	end
 	function panel:SetStat(key, value, color)
+		if key == "Username" and userLbl then
+			userLbl.Text = (value == nil or value == "-") and "" or tostring(value)
+			return
+		end
 		if not rows[key] then addStat(key) end
 		local r = rows[key]
 		r.Text = tostring(value)
