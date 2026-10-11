@@ -3691,6 +3691,106 @@ function Tab:AddGroup(opts)
 	return proxy
 end
 
+function Tab:AddCollapsible(opts)
+	opts = opts or {}
+	local parent = self.Container
+	local headOrder = self:_nextOrder()
+	local bodyOrder = self:_nextOrder()
+
+	local head = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = headOrder,
+		ZIndex = 3,
+		Parent = parent,
+	}, { new("UIListLayout", { Padding = UDim.new(0, 0), SortOrder = Enum.SortOrder.LayoutOrder }) })
+
+	local body = new("Frame", {
+		Name = "Body",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		LayoutOrder = bodyOrder,
+		ZIndex = 3,
+		Parent = parent,
+	}, { new("UIListLayout", { Padding = UDim.new(0, 0), SortOrder = Enum.SortOrder.LayoutOrder }) })
+
+	local inner = new("CanvasGroup", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		GroupTransparency = 1,
+		Position = UDim2.fromOffset(0, -8),
+		ZIndex = 3,
+		Parent = body,
+	}, { new("UIListLayout", { Padding = UDim.new(0, 0), SortOrder = Enum.SortOrder.LayoutOrder }) })
+
+	local proxy = setmetatable({
+		Window = self.Window, Order = headOrder > 1 and 1 or 0, Container = head,
+		Accent = self.Accent, AccentInverse = self.AccentInverse,
+		_rowMode = true,
+	}, Tab)
+	proxy._collapseBody = body
+	proxy._collapseInner = inner
+	proxy.Body = setmetatable({
+		Window = self.Window, Order = 1, Container = inner,
+		Accent = self.Accent, AccentInverse = self.AccentInverse,
+		_rowMode = true,
+	}, Tab)
+
+	local expanded = true
+	local function measure()
+		local layout = inner:FindFirstChildOfClass("UIListLayout")
+		return layout and layout.AbsoluteContentSize.Y or 0
+	end
+
+	function proxy:SetExpanded(on, instant)
+		on = on ~= false
+		if on == expanded and not instant then return end
+		expanded = on
+		if on then
+			body.Visible = true
+			inner.Visible = true
+			local h = measure()
+			if instant then
+				body.Size = UDim2.new(1, 0, 0, 0)
+				body.AutomaticSize = Enum.AutomaticSize.Y
+				inner.Position = UDim2.fromOffset(0, 0)
+				inner.GroupTransparency = 0
+			else
+				body.AutomaticSize = Enum.AutomaticSize.None
+				body.Size = UDim2.new(1, 0, 0, 0)
+				tween(body, 0.3, { Size = UDim2.new(1, 0, 0, h) }, Enum.EasingStyle.Quint)
+				tween(inner, 0.3, { Position = UDim2.fromOffset(0, 0), GroupTransparency = 0 }, Enum.EasingStyle.Quint)
+				task.delay(0.3, function()
+					if expanded then body.AutomaticSize = Enum.AutomaticSize.Y end
+				end)
+			end
+		else
+			local h = measure()
+			body.AutomaticSize = Enum.AutomaticSize.None
+			body.Size = UDim2.new(1, 0, 0, h)
+			if instant then
+				body.Size = UDim2.new(1, 0, 0, 0)
+				inner.Position = UDim2.fromOffset(0, -8)
+				inner.GroupTransparency = 1
+				body.Visible = false
+			else
+				tween(body, 0.28, { Size = UDim2.new(1, 0, 0, 0) }, Enum.EasingStyle.Quint)
+				tween(inner, 0.28, { Position = UDim2.fromOffset(0, -8), GroupTransparency = 1 }, Enum.EasingStyle.Quint)
+				task.delay(0.28, function()
+					if not expanded then body.Visible = false end
+				end)
+			end
+		end
+	end
+
+	proxy:SetExpanded(opts.DefaultExpanded ~= false, true)
+	return proxy
+end
+
 local function titleBlock(parent, name, description, rightInset, iconId)
 	local tx = 12
 	if type(iconId) == "string" and iconId ~= "" then
