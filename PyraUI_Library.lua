@@ -1430,8 +1430,8 @@ function Library:_ensureMonitorBar()
 		Name = "MonitorBar",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = HOME,
-		Size = UDim2.fromOffset(0, 0),
-		AutomaticSize = Enum.AutomaticSize.XY,
+		Size = UDim2.fromOffset(150, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = THEME.Glass,
 		BackgroundTransparency = self.IsMobile and SOLID_T or GLASS_DOCK_T,
 		BorderSizePixel = 0,
@@ -1441,11 +1441,11 @@ function Library:_ensureMonitorBar()
 	}, {
 		corner(8),
 		stroke(Color3.new(1, 1, 1), 0.86),
-		pad(6, 12, 6, 12),
+		pad(8, 12, 8, 12),
 		new("UIListLayout", {
 			FillDirection = Enum.FillDirection.Vertical,
-			HorizontalAlignment = Enum.HorizontalAlignment.Left,
-			Padding = UDim.new(0, 4),
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, 6),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
@@ -1918,36 +1918,26 @@ function Library:AddMonitor(key, label_)
 		LayoutOrder = order * 2 - 1,
 		Parent = self.MonitorBar,
 	})
+	-- Full-width stacked row: CAPTION on the left, value on the right.
 	local cell = new("Frame", {
-		Size = UDim2.fromOffset(0, 24),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(1, 0, 0, 22),
 		BackgroundTransparency = 1,
 		Visible = false,
 		LayoutOrder = order * 2,
 		Parent = self.MonitorBar,
 	})
-	local content = new("Frame", {
-		Size = UDim2.new(0, 0, 1, 0),
-		AutomaticSize = Enum.AutomaticSize.X,
-		BackgroundTransparency = 1,
-		Parent = cell,
-	}, {
-		new("UIListLayout", {
-			FillDirection = Enum.FillDirection.Horizontal,
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, 5),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-		}),
-	})
+	local content = cell
 	local capLabel = label({
-		Text = (label_ or key):upper(), Font = FONT_BOLD, TextSize = 9, TextColor3 = THEME.SubText,
+		Text = (label_ or key):upper(), Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
 		TextTransparency = 1,
-		Size = UDim2.fromOffset(0, 12), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = 1, Parent = content,
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
+		Size = UDim2.new(0.5, 0, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, Parent = cell,
 	})
 	local valueLabel = label({
 		Text = "--", Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text, RichText = true,
 		TextTransparency = 1,
-		Size = UDim2.fromOffset(0, 14), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = 2, Parent = content,
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.new(0.5, 0, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, Parent = cell,
 	})
 
 	local clickBtn = new("TextButton", {
@@ -5587,6 +5577,45 @@ function Library:CreatePanel(opts)
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextYAlignment = Enum.TextYAlignment.Top,
 			ZIndex = 6, Parent = scroll,
+		})
+		box.FocusLost:Connect(function() fire(o.Callback, box.Text) end)
+		local a = {}
+		function a:GetText() return box.Text end
+		function a:SetText(t) box.Text = tostring(t or "") end
+		return a
+	end
+
+	-- Single-line labelled input inside the panel.
+	function panel:AddInput(o)
+		o = o or {}
+		local wrap = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 34),
+			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
+			BackgroundTransparency = 0.2,
+			BorderSizePixel = 0,
+			LayoutOrder = nextOrder(),
+			ZIndex = 4,
+			Parent = body,
+		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9) })
+		if o.Name then
+			label({
+				Text = o.Name, Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
+				AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
+				Size = UDim2.fromOffset(70, 14), ZIndex = 5, Parent = wrap,
+			})
+		end
+		local box = new("TextBox", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.new(1, o.Name and -90 or -20, 1, -8),
+			BackgroundTransparency = 1,
+			ClearTextOnFocus = false,
+			Font = FONT, TextSize = 13, TextColor3 = THEME.Body,
+			PlaceholderText = o.Placeholder or "",
+			PlaceholderColor3 = THEME.Muted,
+			Text = tostring(o.Default or ""),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			ZIndex = 6, Parent = wrap,
 		})
 		box.FocusLost:Connect(function() fire(o.Callback, box.Text) end)
 		local a = {}
