@@ -1548,7 +1548,7 @@ end
 --   { Icon = "rbxassetid://123", Glyph = "S" (fallback text), Callback = function(text) end }
 -- The first entry is the left-most button. The text box shrinks to make room.
 function Library.BuildInlineButtons(frame, box, buttons, getText)
-	local SIZE, GAP, EDGE = 24, 6, 12
+	local SIZE, GAP, EDGE = 34, 6, 12   -- keep SIZE + GAP in sync with the "* 40" in Tab:AddInput
 	local n = #buttons
 	box.Position = UDim2.new(1, -(EDGE + n * (SIZE + GAP)), 0.5, 0)
 	for j, b in ipairs(buttons) do
@@ -1563,19 +1563,20 @@ function Library.BuildInlineButtons(frame, box, buttons, getText)
 			Text = "",
 			ZIndex = 8,
 			Parent = frame,
-		}, { corner(6), stroke(Color3.new(1, 1, 1), 0.88) })
+		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.88) })
 		local img, glyph
 		if type(b.Icon) == "string" and b.Icon ~= "" then
-			-- No tint: the icon keeps whatever colours you drew it with.
+			-- No tint: the icon keeps whatever colours you drew it with. Drawn big
+			-- (26px) so a high-res source is not squashed into a few pixels.
 			img = new("ImageLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromOffset(15, 15), BackgroundTransparency = 1,
+				Size = UDim2.fromOffset(26, 26), BackgroundTransparency = 1,
 				Image = b.Icon, ImageTransparency = 0.25, ScaleType = Enum.ScaleType.Fit,
 				ZIndex = 9, Parent = btn,
 			})
 		else
 			glyph = label({
-				Text = b.Glyph or "?", Font = FONT_BOLD, TextSize = 12, TextColor3 = THEME.SubText,
+				Text = b.Glyph or "?", Font = FONT_BOLD, TextSize = 14, TextColor3 = THEME.SubText,
 				Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center,
 				ZIndex = 9, Parent = btn,
 			})
@@ -5297,11 +5298,12 @@ function Tab:AddInput(opts)
 	opts = opts or {}
 	local isSearch = opts.Search == true
 	local hasPicker = type(opts.PickerSource) == "function"
-	local frame = elementFrame(self, opts.Description and 50 or 38)
-	frame.ClipsDescendants = true
-	-- Inline icon buttons (e.g. save / delete) take 30px each beside the box.
+	-- Inline icon buttons (e.g. save / delete) are 34px + a 6px gap each, beside the
+	-- box. The row grows to 46px so the bigger, sharper icons have room.
 	local btnCount = (type(opts.Buttons) == "table" and not isSearch) and #opts.Buttons or 0
-	titleBlock(frame, opts.Name or "Input", opts.Description, 160 + btnCount * 30)
+	local frame = elementFrame(self, opts.Description and 50 or (btnCount > 0 and 46 or 38))
+	frame.ClipsDescendants = true
+	titleBlock(frame, opts.Name or "Input", opts.Description, 160 + btnCount * 40)
 	self.Window:_index(self, frame, opts.Name or "Input", opts.Description)
 
 	local COLLAPSED, EXPANDED = 28, 170
