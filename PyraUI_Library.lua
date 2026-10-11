@@ -1430,8 +1430,8 @@ function Library:_ensureMonitorBar()
 		Name = "MonitorBar",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = HOME,
-		Size = UDim2.fromOffset(0, 30),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
 		BackgroundColor3 = THEME.Glass,
 		BackgroundTransparency = self.IsMobile and SOLID_T or GLASS_DOCK_T,
 		BorderSizePixel = 0,
@@ -1441,11 +1441,11 @@ function Library:_ensureMonitorBar()
 	}, {
 		corner(8),
 		stroke(Color3.new(1, 1, 1), 0.86),
-		pad(0, 10, 0, 10),
+		pad(6, 12, 6, 12),
 		new("UIListLayout", {
-			FillDirection = Enum.FillDirection.Horizontal,
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, 10),
+			FillDirection = Enum.FillDirection.Vertical,
+			HorizontalAlignment = Enum.HorizontalAlignment.Left,
+			Padding = UDim.new(0, 4),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
@@ -1910,9 +1910,9 @@ function Library:AddMonitor(key, label_)
 	local order = self.MonitorCount
 
 	local sep = new("Frame", {
-		Size = UDim2.fromOffset(1, 16),
+		Size = UDim2.new(1, 0, 0, 1),
 		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.86,
+		BackgroundTransparency = 0.9,
 		BorderSizePixel = 0,
 		Visible = false,
 		LayoutOrder = order * 2 - 1,
@@ -1945,7 +1945,7 @@ function Library:AddMonitor(key, label_)
 		Size = UDim2.fromOffset(0, 12), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = 1, Parent = content,
 	})
 	local valueLabel = label({
-		Text = "--", Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text,
+		Text = "--", Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text, RichText = true,
 		TextTransparency = 1,
 		Size = UDim2.fromOffset(0, 14), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = 2, Parent = content,
 	})
