@@ -5129,6 +5129,8 @@ local function trackDrag(window, target, onMove, onEnd)
 	end)
 end
 
+Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true }
+
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
 	local mid = height / 2
