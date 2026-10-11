@@ -2218,21 +2218,22 @@ function Library:CreateSidePanel(opts)
 		if opts.Editor then return nil end
 		o = o or {}
 		local sideSign = o.Side == "Right" and 1 or -1
+		local centerY = o.Slot and (20 + (o.Slot - 1) * 32) or 36
+		local iconSize = o.IconSize or 20
 		local on = false
 		local btn = new("TextButton", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, sideSign * 66, 0, 36),
+			Position = UDim2.new(0.5, sideSign * 66, 0, centerY),
 			Size = UDim2.fromOffset(32, 32),
-			BackgroundColor3 = THEME.Card,
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Text = "",
 			ZIndex = 6,
 			Parent = avatarWrap,
-		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.88) })
+		})
 		local img = new("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromOffset(iconSize, iconSize), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
 			Image = o.Icon or "", ImageColor3 = THEME.SubText, ZIndex = 7, Parent = btn,
 		})
 		local api = {}
@@ -2249,8 +2250,12 @@ function Library:CreateSidePanel(opts)
 			render()
 		end
 		function api:Get() return on end
-		btn.MouseEnter:Connect(function() tween(btn, 0.15, { BackgroundTransparency = 0.9 }) end)
-		btn.MouseLeave:Connect(function() tween(btn, 0.15, { BackgroundTransparency = 1 }) end)
+		btn.MouseEnter:Connect(function()
+			if not on then tween(img, 0.15, { ImageColor3 = THEME.Text }) end
+		end)
+		btn.MouseLeave:Connect(function()
+			if not on then tween(img, 0.15, { ImageColor3 = THEME.SubText }) end
+		end)
 		btn.Activated:Connect(function()
 			playSound(SOUND_CLICK, 0.3)
 			fire(o.Callback, not on)
@@ -2264,26 +2269,30 @@ function Library:CreateSidePanel(opts)
 		if clearBtn or opts.Editor then return end
 		clearBtn = new("TextButton", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 28, 0, 8),
-			Size = UDim2.fromOffset(20, 20),
-			BackgroundColor3 = THEME.Glass,
-			BackgroundTransparency = 0.05,
+			Position = UDim2.new(0.5, 30, 0, 8),
+			Size = UDim2.fromOffset(26, 26),
+			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Text = "",
 			Visible = false,
 			ZIndex = 8,
 			Parent = avatarWrap,
-		}, { round(), stroke(Color3.new(1, 1, 1), 0.75) })
+		})
 		local clearImg, clearGlyph
 		if type(ICONS.Close) == "string" and ICONS.Close ~= "" then
+			new("ImageLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 1, 0.5, 1),
+				Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+				Image = ICONS.Close, ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 0.55, ZIndex = 8, Parent = clearBtn,
+			})
 			clearImg = new("ImageLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromOffset(10, 10), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
-				Image = ICONS.Close, ImageColor3 = THEME.SubText, ZIndex = 9, Parent = clearBtn,
+				Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+				Image = ICONS.Close, ImageColor3 = THEME.Text, ZIndex = 9, Parent = clearBtn,
 			})
 		else
 			clearGlyph = label({
-				Text = "✕", Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
+				Text = "✕", Font = FONT_BOLD, TextSize = 18, TextColor3 = THEME.Text, TextStrokeTransparency = 0.5,
 				Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 9, Parent = clearBtn,
 			})
 		end
@@ -2292,8 +2301,8 @@ function Library:CreateSidePanel(opts)
 			if clearGlyph then tween(clearGlyph, 0.15, { TextColor3 = Color3.fromRGB(235, 120, 120) }) end
 		end)
 		clearBtn.MouseLeave:Connect(function()
-			if clearImg then tween(clearImg, 0.15, { ImageColor3 = THEME.SubText }) end
-			if clearGlyph then tween(clearGlyph, 0.15, { TextColor3 = THEME.SubText }) end
+			if clearImg then tween(clearImg, 0.15, { ImageColor3 = THEME.Text }) end
+			if clearGlyph then tween(clearGlyph, 0.15, { TextColor3 = THEME.Text }) end
 		end)
 		clearBtn.Activated:Connect(function()
 			playSound(SOUND_CLICK, 0.3, 0.9)
@@ -4952,6 +4961,19 @@ local function trackDrag(window, target, onMove, onEnd)
 	end)
 end
 
+function Library.BuildSubMarker(frame, height)
+	local mid = height / 2
+	local function bar(x, y, w, h)
+		return new("Frame", {
+			Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h),
+			BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.7,
+			BorderSizePixel = 0, ZIndex = 4, Parent = frame,
+		}, { corner(1) })
+	end
+	bar(22, 1, 2, mid)
+	bar(22, mid - 1, 16, 2)
+end
+
 function Tab:AddColorPicker(opts)
 	opts = opts or {}
 	local h, s, v = (opts.Default or Color3.fromRGB(255, 255, 255)):ToHSV()
@@ -4960,10 +4982,14 @@ function Tab:AddColorPicker(opts)
 
 	local frame = elementFrame(self, HEADER)
 	frame.ClipsDescendants = true
-	label({
-		Text = opts.Name or "Color", Font = FONT_MEDIUM, TextSize = 13,
-		Position = UDim2.fromOffset(12, 0), Size = UDim2.new(0.5, -12, 0, HEADER), ZIndex = 4, Parent = frame,
-	})
+	if opts.Sub then
+		Library.BuildSubMarker(frame, HEADER)
+	else
+		label({
+			Text = opts.Name or "Color", Font = FONT_MEDIUM, TextSize = 13,
+			Position = UDim2.fromOffset(12, 0), Size = UDim2.new(0.5, -12, 0, HEADER), ZIndex = 4, Parent = frame,
+		})
+	end
 	self.Window:_index(self, frame, opts.Name or "Color", opts.Description)
 	local swatch = new("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -5832,13 +5858,13 @@ function Tab:AddPlayerSearch(opts)
 		Position = UDim2.new(0, 12, 0, 8),
 		Size = UDim2.new(1, -52, 0, 24),
 		BackgroundColor3 = THEME.Card,
-		BackgroundTransparency = 0.94,
+		BackgroundTransparency = 1,
 		ClearTextOnFocus = false,
 		Font = FONT,
 		TextSize = 12,
 		TextColor3 = THEME.Text,
 		PlaceholderText = opts.Placeholder or "Search a player...",
-		PlaceholderColor3 = THEME.Muted,
+		PlaceholderColor3 = Color3.new(1, 1, 1),
 		Text = "",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -5928,13 +5954,13 @@ function Tab:AddPlayerSearch(opts)
 					local row = new("TextButton", {
 						Size = UDim2.new(1, 0, 0, ROW_H),
 						BackgroundColor3 = THEME.Card,
-						BackgroundTransparency = CARD_T,
+						BackgroundTransparency = 1,
 						AutoButtonColor = false,
 						Text = "",
 						LayoutOrder = shown,
 						ZIndex = 6,
 						Parent = listHolder,
-					}, { corner(7), stroke(Color3.new(1, 1, 1), 0.92) })
+					}, { corner(7), stroke(Color3.new(1, 1, 1), 0.88) })
 					local pfp = new("ImageLabel", {
 						AnchorPoint = Vector2.new(0, 0.5),
 						Position = UDim2.new(0, 6, 0.5, 0),
@@ -5959,8 +5985,8 @@ function Tab:AddPlayerSearch(opts)
 						Position = UDim2.fromOffset(42, 21), Size = UDim2.new(1, -52, 0, 13),
 						TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
 					})
-					row.MouseEnter:Connect(function() tween(row, 0.12, { BackgroundTransparency = CARD_HOVER_T }) end)
-					row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = CARD_T }) end)
+					row.MouseEnter:Connect(function() tween(row, 0.12, { BackgroundTransparency = 0.9 }) end)
+					row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = 1 }) end)
 					row.Activated:Connect(function()
 						selecting = true
 						box.Text = p.DisplayName
