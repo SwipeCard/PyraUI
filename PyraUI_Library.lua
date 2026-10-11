@@ -4971,17 +4971,25 @@ local function trackDrag(window, target, onMove, onEnd)
 	end)
 end
 
-function Library.BuildSubMarker(frame, height)
+function Library.BuildSubMarker(frame, height, opts)
+	opts = opts or {}
 	local mid = height / 2
+	local reach = opts.Reach or 11
+	local rightInset = opts.RightInset
 	local function bar(x, y, w, h)
 		return new("Frame", {
-			Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h),
+			Position = UDim2.fromOffset(x, y),
+			Size = typeof(w) == "UDim2" and w or UDim2.fromOffset(w, h),
 			BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0,
 			BorderSizePixel = 0, ZIndex = 4, Parent = frame,
 		}, { corner(1) })
 	end
-	bar(22, 1, 2, mid)
-	bar(22, mid - 1, 150, 2)
+	bar(22, -reach, 2, mid + 1 + reach)
+	if rightInset then
+		bar(22, mid - 1, UDim2.new(1, -(22 + rightInset), 0, 2))
+	else
+		bar(22, mid - 1, 150, 2)
+	end
 end
 
 function Tab:AddColorPicker(opts)
@@ -4992,8 +5000,18 @@ function Tab:AddColorPicker(opts)
 
 	local frame = elementFrame(self, HEADER)
 	frame.ClipsDescendants = true
+	local clipper = frame
 	if opts.Sub then
-		Library.BuildSubMarker(frame, HEADER)
+		frame.ClipsDescendants = false
+		clipper = new("Frame", {
+			Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0,
+			ClipsDescendants = true, ZIndex = 4, Parent = frame,
+		})
+		local hexW = 0
+		for _, sample in ipairs({ "#000000", "#BBBBBB", "#DDDDDD", "#FFFFFF" }) do
+			hexW = math.max(hexW, Library.MeasureText(sample, 12, FONT_MEDIUM))
+		end
+		Library.BuildSubMarker(frame, HEADER, { RightInset = 54 + hexW + 8 })
 	else
 		label({
 			Text = opts.Name or "Color", Font = FONT_MEDIUM, TextSize = 13,
@@ -5025,7 +5043,7 @@ function Tab:AddColorPicker(opts)
 		BackgroundTransparency = 1,
 		Visible = false,
 		ZIndex = 4,
-		Parent = frame,
+		Parent = clipper,
 	})
 	local sv = new("TextButton", {
 		Position = UDim2.fromOffset(12, HEADER),
@@ -5949,13 +5967,17 @@ function Tab:AddPlayerSearch(opts)
 	local selecting = false
 	local api = {}
 
-	local function rebuild(query)
-		for _, c in ipairs(listHolder:GetChildren()) do
-			if c:IsA("TextButton") then c:Destroy() end
-		end
-		query = (query or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+	local rowMap = {}
+	local liveId = 0
+	local win = self.Window
+
+	local function normalize(q)
+		return (q or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+	end
+
+	local function collect(query)
 		local entries = {}
-		local me = game:GetService("Players").LocalPlayer
+		local me = Players.LocalPlayer
 		for _, p in ipairs(Players:GetPlayers()) do
 			if p ~= me then
 				local hitName = p.Name:lower():find(query, 1, true)
@@ -5975,6 +5997,15 @@ function Tab:AddPlayerSearch(opts)
 			if a.key ~= b.key then return a.key < b.key end
 			return a.name < b.name
 		end)
+		return entries
+	end
+
+	local function rebuild(query)
+		for _, c in ipairs(listHolder:GetChildren()) do
+			if c:IsA("TextButton") then c:Destroy() end
+		end
+		rowMap = {}
+		local entries = collect(normalize(query))
 		local shown = 0
 		for _, entry in ipairs(entries) do
 			if shown >= 20 then break end
@@ -6015,13 +6046,15 @@ function Tab:AddPlayerSearch(opts)
 				Position = UDim2.fromOffset(42, 21), Size = UDim2.new(1, -(52 + statusW), 0, 13),
 				TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row,
 			})
+			local statusLabel
 			if entry.text then
-				label({
+				statusLabel = label({
 					Text = entry.text, Font = FONT_BOLD, TextSize = 11, TextColor3 = entry.color or THEME.SubText,
 					AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
 					Size = UDim2.fromOffset(70, 16), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 7, Parent = row,
 				})
 			end
+			rowMap[p] = { row = row, status = statusLabel, text = entry.text, color = entry.color }
 			row.MouseEnter:Connect(function() tween(row, 0.12, { BackgroundTransparency = 0.9 }) end)
 			row.MouseLeave:Connect(function() tween(row, 0.12, { BackgroundTransparency = 1 }) end)
 			row.Activated:Connect(function()
@@ -6038,6 +6071,51 @@ function Tab:AddPlayerSearch(opts)
 		return listH
 	end
 
+	local function refreshLive()
+		if not open or selecting then return end
+		local entries = collect(normalize(box.Text))
+		local count = math.min(#entries, 20)
+		local needRebuild = false
+		local tracked = 0
+		for _ in pairs(rowMap) do tracked += 1 end
+		if tracked ~= count then needRebuild = true end
+		if not needRebuild then
+			for i = 1, count do
+				local e = entries[i]
+				local rm = rowMap[e.p]
+				if not rm or not rm.row.Parent or (rm.status ~= nil) ~= (e.text ~= nil) then
+					needRebuild = true
+					break
+				end
+			end
+		end
+		if needRebuild then
+			local listH = rebuild(box.Text)
+			tween(frame, 0.2, { Size = UDim2.new(1, 0, 0, HEADER + listH) })
+			return
+		end
+		for i = 1, count do
+			local e = entries[i]
+			local rm = rowMap[e.p]
+			rm.row.LayoutOrder = i
+			if rm.status and (rm.text ~= e.text or rm.color ~= e.color) then
+				rm.text, rm.color = e.text, e.color
+				rm.status.Text = e.text
+				tween(rm.status, 0.2, { TextColor3 = e.color or THEME.SubText })
+			end
+		end
+	end
+	local function startLive()
+		liveId += 1
+		local id = liveId
+		task.spawn(function()
+			while open and id == liveId and not win.Destroyed do
+				task.wait(0.25)
+				if open and id == liveId and not win.Destroyed then pcall(refreshLive) end
+			end
+		end)
+	end
+
 	function api:Open()
 		if open then return end
 		open = true
@@ -6045,10 +6123,12 @@ function Tab:AddPlayerSearch(opts)
 		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER + listH) }, Enum.EasingStyle.Quint)
 		tween(boxStroke, 0.2, { Transparency = 0.4 })
 		playSound(SOUND_CLICK, 0.2, 1.05)
+		startLive()
 	end
 	function api:Close()
 		if not open then return end
 		open = false
+		liveId += 1
 		if box:IsFocused() then box:ReleaseFocus() end
 		tween(frame, 0.3, { Size = UDim2.new(1, 0, 0, HEADER) }, Enum.EasingStyle.Quint)
 		tween(boxStroke, 0.2, { Transparency = 0.88 })
