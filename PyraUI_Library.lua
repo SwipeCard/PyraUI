@@ -5524,11 +5524,13 @@ function Tab:AddRandomSlider(opts)
 	})
 
 	local ACC, ACCI = self.Accent, self.AccentInverse
+	local OFF_BG, OFF_T = THEME.Glass, 0.3
 	local api_extra_chip
 	local rngChip = new("TextButton", {
 		Size = UDim2.fromOffset(62, 20),
 		LayoutOrder = 2,
-		BackgroundColor3 = randomize and ACC or THEME.Switch,
+		BackgroundColor3 = randomize and ACC or OFF_BG,
+		BackgroundTransparency = randomize and 0 or OFF_T,
 		AutoButtonColor = false,
 		Font = FONT_BOLD,
 		TextSize = 9,
@@ -5545,7 +5547,8 @@ function Tab:AddRandomSlider(opts)
 		extraChip = new("TextButton", {
 			Size = UDim2.fromOffset(w, 20),
 			LayoutOrder = 3,
-			BackgroundColor3 = st and ACC or THEME.Switch,
+			BackgroundColor3 = st and ACC or OFF_BG,
+			BackgroundTransparency = st and 0 or OFF_T,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
 			TextSize = 9,
@@ -5559,7 +5562,7 @@ function Tab:AddRandomSlider(opts)
 			on = on == true
 			if on == st then return end
 			st = on
-			tween(extraChip, 0.2, { BackgroundColor3 = on and ACC or THEME.Switch })
+			tween(extraChip, 0.2, { BackgroundColor3 = on and ACC or OFF_BG, BackgroundTransparency = on and 0 or OFF_T })
 			extraChip.TextColor3 = on and ACCI or THEME.Text
 			playSound(SOUND_CLICK, 0.22, on and 1.05 or 0.95)
 			fire(opts.ChipCallback, on)
@@ -5648,7 +5651,7 @@ function Tab:AddRandomSlider(opts)
 		on = on == true
 		if on == randomize then return end
 		randomize = on
-		tween(rngChip, 0.25, { BackgroundColor3 = on and ACC or THEME.Switch })
+		tween(rngChip, 0.25, { BackgroundColor3 = on and ACC or OFF_BG, BackgroundTransparency = on and 0 or OFF_T })
 		rngChip.TextColor3 = on and ACCI or THEME.Text
 
 		morphing = true
@@ -5763,7 +5766,8 @@ function Tab:AddRandomSlider(opts)
 	end)
 
 	rngChip.TextColor3 = randomize and self.AccentInverse or THEME.Text
-	rngChip.BackgroundColor3 = randomize and self.Accent or THEME.Switch
+	rngChip.BackgroundColor3 = randomize and self.Accent or OFF_BG
+	rngChip.BackgroundTransparency = randomize and 0 or OFF_T
 	render(true)
 	self.Window:_registerFlag(opts.Flag, api, "randomslider")
 	return api
