@@ -2204,7 +2204,7 @@ function Library:CreateSidePanel(opts)
 	local nameLbl, userLbl
 	if not opts.Editor then
 		nameLbl = label({
-			Text = "No Target", Font = FONT_BOLD, TextSize = 14, TextColor3 = THEME.Text,
+			Text = "@Username", Font = FONT_BOLD, TextSize = 14, TextColor3 = THEME.Text,
 			Position = UDim2.fromOffset(76, 6), Size = UDim2.new(1, -76, 0, 18),
 			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = avatarWrap,
 		})
@@ -2234,6 +2234,7 @@ function Library:CreateSidePanel(opts)
 		local iconSize = o.IconSize or 20
 		local on = false
 		local anchor, position, hit
+		local host = avatarWrap
 		if o.Corner == "BottomLeft" then
 			hit = math.max(24, iconSize + 4)
 			anchor = Vector2.new(0, 1)
@@ -2241,7 +2242,10 @@ function Library:CreateSidePanel(opts)
 		elseif o.Corner == "BottomRight" then
 			hit = math.max(24, iconSize + 4)
 			anchor = Vector2.new(1, 1)
-			position = UDim2.new(1, -(((o.Index or 1) - 1) * hit - 10), 1, 0)
+			position = UDim2.new(1, -(10 + ((o.Index or 1) - 1) * hit), 1, -6)
+			host = root
+			local bodyPad = body:FindFirstChildOfClass("UIPadding")
+			if bodyPad then bodyPad.PaddingBottom = UDim.new(0, 42) end
 		else
 			local sideSign = o.Side == "Right" and 1 or -1
 			local offsetX = o.Slot and (50 + (o.Slot - 1) * 32) or 66
@@ -2257,7 +2261,7 @@ function Library:CreateSidePanel(opts)
 			AutoButtonColor = false,
 			Text = "",
 			ZIndex = 6,
-			Parent = avatarWrap,
+			Parent = host,
 		})
 		local img = new("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
