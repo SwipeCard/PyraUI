@@ -1157,7 +1157,7 @@ function Library.new(config)
 		Name = "MobileOverlay",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 16, 1, -16),
-		Size = UDim2.fromOffset(196, 0),
+		Size = UDim2.fromOffset(250, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		Visible = false,
@@ -1910,7 +1910,7 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		o = o or {}
 		local options = o.Options or {}
 		local selected = o.Default or options[1]
-		local HEAD, ROW, MAXROWS = 34, 26, 5
+		local HEAD, ROW, MAXROWS = 34, 22, 5
 		local host, joined = widgetHost()
 		local wrap = new("Frame", {
 			Size = UDim2.new(1, 0, 0, HEAD),
@@ -1970,7 +1970,7 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		end
 		local function openList()
 			if listFrame then listFrame:Destroy(); listFrame = nil end
-			local h = math.min(#options, MAXROWS) * ROW + 6
+			local h = math.min(#options, MAXROWS) * ROW + 4
 			listFrame = new("ScrollingFrame", {
 				Position = UDim2.fromOffset(0, HEAD),
 				Size = UDim2.new(1, 0, 0, h),
@@ -1978,7 +1978,7 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 				ScrollBarThickness = 3, ScrollBarImageTransparency = 0.4,
 				CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y,
 				ZIndex = 5, Parent = wrap,
-			}, { pad(0, 6, 6, 6), new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }) })
+			}, { pad(0, 6, 4, 6), new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }) })
 			for i, opt in ipairs(options) do
 				local ob = new("TextButton", {
 					Size = UDim2.new(1, 0, 0, ROW), BackgroundColor3 = THEME.Card, BackgroundTransparency = 1,
@@ -2839,7 +2839,7 @@ function Library:AddMobileButton(opts)
 
 	local btn = new("TextButton", {
 		Name = opts.Name or "MobileButton",
-		Size = UDim2.fromOffset(196, isToggle and 66 or 52),
+		Size = UDim2.fromOffset(isToggle and 250 or 196, isToggle and 96 or 52),
 		BackgroundColor3 = THEME.Glass,
 		BackgroundTransparency = SOLID_T,
 		AutoButtonColor = false,
@@ -2850,22 +2850,22 @@ function Library:AddMobileButton(opts)
 	local dot, stateLbl
 	if isToggle then
 		dot = new("Frame", {
-			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0),
-			Size = UDim2.fromOffset(12, 12), BackgroundColor3 = state and STATUS_GREEN or THEME.Switch,
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 24, 0.5, 0),
+			Size = UDim2.fromOffset(24, 24), BackgroundColor3 = state and STATUS_GREEN or THEME.Switch,
 			BorderSizePixel = 0, Parent = btn,
 		}, { round() })
 	end
 	local lbl = label({
-		Text = opts.Name or "Button", Font = FONT_BOLD, TextSize = 15, TextColor3 = THEME.Text,
-		Position = UDim2.fromOffset(isToggle and 38 or 16, isToggle and 11 or 0),
-		Size = UDim2.new(1, -(isToggle and 52 or 32), 0, isToggle and 20 or 52),
+		Text = opts.Name or "Button", Font = FONT_BOLD, TextSize = isToggle and 22 or 15, TextColor3 = THEME.Text,
+		Position = UDim2.fromOffset(isToggle and 64 or 16, isToggle and 16 or 0),
+		Size = UDim2.new(1, -(isToggle and 78 or 32), 0, isToggle and 30 or 52),
 		TextTruncate = Enum.TextTruncate.AtEnd, Parent = btn,
 	})
 	if isToggle then
 		stateLbl = label({
-			Text = state and "ON" or "OFF", Font = FONT_BOLD, TextSize = 12,
+			Text = state and "ON" or "OFF", Font = FONT_BOLD, TextSize = 16,
 			TextColor3 = state and STATUS_GREEN or THEME.Muted,
-			Position = UDim2.fromOffset(38, 33), Size = UDim2.new(1, -52, 0, 18),
+			Position = UDim2.fromOffset(64, 50), Size = UDim2.new(1, -78, 0, 24),
 			Parent = btn,
 		})
 	end
@@ -3827,7 +3827,9 @@ function Tab:AddCollapsible(opts)
 	local expanded = true
 	local function measure()
 		local layout = inner:FindFirstChildOfClass("UIListLayout")
-		return layout and layout.AbsoluteContentSize.Y or 0
+		local h = layout and layout.AbsoluteContentSize.Y or 0
+		local sc = self.Window.UIScale and self.Window.UIScale.Scale or 1
+		return h / math.max(sc, 0.05)
 	end
 
 	function proxy:SetExpanded(on, instant)
@@ -3849,7 +3851,10 @@ function Tab:AddCollapsible(opts)
 				tween(body, 0.3, { Size = UDim2.new(1, 0, 0, h) }, Enum.EasingStyle.Quint)
 				tween(inner, 0.3, { Position = UDim2.fromOffset(0, 0), GroupTransparency = 0 }, Enum.EasingStyle.Quint)
 				task.delay(0.3, function()
-					if expanded then body.AutomaticSize = Enum.AutomaticSize.Y end
+					if expanded then
+						body.Size = UDim2.new(1, 0, 0, 0)
+						body.AutomaticSize = Enum.AutomaticSize.Y
+					end
 				end)
 			end
 		else
@@ -4107,11 +4112,13 @@ function Tab:AddToggle(opts)
 	local chipInline = hasChip and opts.ChipInline == true
 	if chipInline then inset = hasKey and 110 or 70 end
 	local noSwitch = opts.NoSwitch == true
+	local circle = opts.Circle == true and not noSwitch
 	local rightPad = noSwitch and 12 or 60
 	if noSwitch then inset = math.max(inset - 48, 50) end
 	local inlineRow
 	local iconToggle = opts.IconToggle == true and type(opts.Icon) == "string" and opts.Icon ~= ""
 	if iconToggle and not noSwitch then rightPad = 46 end
+	if circle then rightPad = 44 end
 	if sliderOpts then
 		label({
 			Text = opts.Name or "Toggle", Font = FONT_MEDIUM, TextSize = 13,
@@ -4177,11 +4184,24 @@ function Tab:AddToggle(opts)
 
 	local bigIcon
 	local switch, knob
+	local circleFrame, circleStroke
 	local checkbox, checkMark
-	local isCheckbox = opts.Checkbox == true and not iconToggle and not sliderOpts
+	local isCheckbox = opts.Checkbox == true and not iconToggle and not sliderOpts and not circle
 	if noSwitch then
 		iconToggle = false
 		isCheckbox = false
+	elseif circle then
+		circleFrame = new("Frame", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = sliderOpts and UDim2.new(1, -14, 0, 18) or UDim2.new(1, -14, 0.5, 0),
+			Size = UDim2.fromOffset(20, 20),
+			BackgroundColor3 = self.Accent,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ZIndex = 4,
+			Parent = frame,
+		}, { round(), stroke(THEME.SubText, 0, 2) })
+		circleStroke = circleFrame:FindFirstChildOfClass("UIStroke")
 	elseif iconToggle then
 
 		bigIcon = new("ImageLabel", {
@@ -4252,7 +4272,10 @@ function Tab:AddToggle(opts)
 		if noSwitch then return end
 		local t = instant and 0 or 0.28
 		local info = TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-		if iconToggle then
+		if circle then
+			TweenService:Create(circleFrame, info, { BackgroundTransparency = state and 0 or 1 }):Play()
+			TweenService:Create(circleStroke, info, { Color = state and self.Accent or THEME.SubText }):Play()
+		elseif iconToggle then
 			if bigIcon then
 				if type(iconSel) == "string" and iconSel ~= "" then
 					bigIcon.Image = state and iconSel or iconBase
@@ -4415,7 +4438,7 @@ function Tab:AddToggle(opts)
 			TextColor3 = THEME.Body,
 			ZIndex = 7,
 			Parent = frame,
-		}, { pad(0, 4, 0, 4) })
+		}, { pad(0, 4, 0, 4), new("UISizeConstraint", { MinSize = Vector2.new(24, 0) }) })
 		local function crender() chip.Text = listening and "..." or (key and key.Name or "None") end
 
 		chip.MouseEnter:Connect(function() if not listening then tween(chip, 0.15, { TextColor3 = THEME.Text }) end end)
@@ -4442,7 +4465,7 @@ function Tab:AddToggle(opts)
 
 	if hasChip then
 		local chipState = opts.ChipDefault == true
-		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 12, FONT_BOLD)) + 10
+		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 12, FONT_BOLD)) + 4
 		local chipX = -rightPad
 		local chipProps = {
 			Size = UDim2.fromOffset(chipW, 20),
@@ -4451,6 +4474,7 @@ function Tab:AddToggle(opts)
 			Font = FONT_BOLD,
 			TextSize = chipState and 12 or 10,
 			TextColor3 = chipState and THEME.Text or THEME.ChipOff,
+			TextXAlignment = Enum.TextXAlignment.Right,
 			Text = opts.Chip,
 			ZIndex = 7,
 			Parent = frame,
@@ -4500,11 +4524,12 @@ function Tab:AddToggle(opts)
 
 		if hasKey and keyChipRef and not inlineRow then
 			local function reposition()
-				local x = -rightPad - keyChipRef.AbsoluteSize.X - 2
+				local x = -rightPad - keyChipRef.AbsoluteSize.X
 				chip.Position = UDim2.new(1, x, 0.5, 0)
-				if dot then dot.Position = UDim2.new(1, x - chipW - 5, 0.5, 0) end
+				if dot then dot.Position = UDim2.new(1, x - math.max(chip.TextBounds.X, 1) - 6, 0.5, 0) end
 			end
 			keyChipRef:GetPropertyChangedSignal("AbsoluteSize"):Connect(reposition)
+			chip:GetPropertyChangedSignal("TextBounds"):Connect(reposition)
 			task.defer(reposition)
 		end
 	end
@@ -5007,7 +5032,7 @@ function Tab:AddDropdown(opts)
 	local options = opts.Options or {}
 	local selected = opts.Default or options[1]
 	local isOpen = false
-	local HEADER, OPTION_H, OPTION_GAP = 36, 26, 2
+	local HEADER, OPTION_H, OPTION_GAP = 36, 22, 0
 
 	local frame = elementFrame(self, HEADER)
 	frame.ClipsDescendants = true
@@ -5086,13 +5111,13 @@ function Tab:AddDropdown(opts)
 
 	local list = new("Frame", {
 		Position = UDim2.fromOffset(0, HEADER),
-		Size = UDim2.new(1, 0, 0, #options * (OPTION_H + OPTION_GAP) + 8),
+		Size = UDim2.new(1, 0, 0, #options * (OPTION_H + OPTION_GAP) + 4),
 		BackgroundTransparency = 1,
 		ZIndex = 4,
 		Visible = false,
 		Parent = frame,
 	}, {
-		pad(0, 8, 8, 8),
+		pad(0, 8, 4, 8),
 		new("UIListLayout", { Padding = UDim.new(0, OPTION_GAP), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 
@@ -5154,7 +5179,7 @@ function Tab:AddDropdown(opts)
 	end
 	buildOptions()
 
-	local fullHeight = HEADER + #options * (OPTION_H + OPTION_GAP) + 8
+	local fullHeight = HEADER + #options * (OPTION_H + OPTION_GAP) + 4
 
 	local openId = 0
 	function api:SetOpen(state)
@@ -5187,8 +5212,8 @@ function Tab:AddDropdown(opts)
 		end
 		table.clear(items)
 		buildOptions()
-		fullHeight = HEADER + #options * (OPTION_H + OPTION_GAP) + 8
-		list.Size = UDim2.new(1, 0, 0, #options * (OPTION_H + OPTION_GAP) + 8)
+		fullHeight = HEADER + #options * (OPTION_H + OPTION_GAP) + 4
+		list.Size = UDim2.new(1, 0, 0, #options * (OPTION_H + OPTION_GAP) + 4)
 		if isOpen then frame.Size = UDim2.new(1, 0, 0, fullHeight) end
 		local stillThere = false
 		for _, o in ipairs(options) do if o == selected then stillThere = true break end end
@@ -5211,7 +5236,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 12
+Library.Version = 13
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
@@ -6155,7 +6180,7 @@ function Tab:AddPlayerSearch(opts)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 6,
 		Parent = frame,
-	}, { corner(6), stroke(Color3.new(1, 1, 1), 0.88), pad(0, 8, 0, 8) })
+	}, { pad(0, 8, 0, 8) })
 	local boxStroke = box:FindFirstChildOfClass("UIStroke")
 
 	local focusBlocker = new("TextButton", {
@@ -6176,17 +6201,17 @@ function Tab:AddPlayerSearch(opts)
 
 	focusBlocker.MouseEnter:Connect(function()
 		UserInputService.MouseIcon = "rbxasset://SystemCursors/PointingHand"
-		tween(boxStroke, 0.12, { Transparency = 0.2 })
+		if boxStroke then tween(boxStroke, 0.12, { Transparency = 0.2 }) end
 	end)
 	focusBlocker.MouseLeave:Connect(function()
 		UserInputService.MouseIcon = ""
-		tween(boxStroke, 0.12, { Transparency = 0.4 })
+		if boxStroke then tween(boxStroke, 0.12, { Transparency = 0.4 }) end
 	end)
 
 	local searchBtn = new("TextButton", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(1, -20, 0.5, 0),
-		Size = UDim2.fromOffset(32, 32),
+		Size = UDim2.fromOffset(38, 38),
 		BackgroundColor3 = THEME.Card,
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
@@ -6198,7 +6223,7 @@ function Tab:AddPlayerSearch(opts)
 	if useSearchIcon then
 		new("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(24, 24), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromOffset(32, 32), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Search, ImageColor3 = THEME.Body, ZIndex = 8, Parent = searchBtn,
 		})
 	else
