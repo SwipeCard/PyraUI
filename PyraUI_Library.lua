@@ -205,7 +205,7 @@ local function new(className, props, children)
 	return inst
 end
 
-local function corner(radius) return new("UICorner", { CornerRadius = UDim.new(0, radius) }) end
+local function corner(radius) return new("UICorner", { CornerRadius = UDim.new(0, radius > 3 and radius - 1 or radius) }) end
 local function round() return new("UICorner", { CornerRadius = UDim.new(1, 0) }) end
 local function stroke(color, transparency, thickness)
 	return new("UIStroke", {
@@ -947,9 +947,10 @@ function Library.new(config)
 		Position = UDim2.new(0, 12, 0, 24),
 		Size = UDim2.fromOffset(30, 30),
 		BackgroundColor3 = THEME.Switch,
+		BackgroundTransparency = 1,
 		ZIndex = 3,
 		Parent = self.Footer,
-	}, { round(), stroke(Color3.new(1, 1, 1), 0.8) })
+	}, { round() })
 	local onlineDot = new("Frame", {
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, 1, 1, 1),
@@ -1116,12 +1117,12 @@ function Library.new(config)
 		Position = UDim2.new(0, 16, 0.5, 0),
 		Size = UDim2.fromOffset(46, 46),
 		BackgroundColor3 = THEME.Glass,
-		BackgroundTransparency = SOLID_T,
+		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Text = "",
 		Visible = false,
 		Parent = self.Gui,
-	}, { round(), stroke(Color3.new(1, 1, 1), 0.85) })
+	}, { round() })
 	new("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
@@ -1725,12 +1726,12 @@ function Library.BuildInlineButtons(frame, box, buttons, getText, flat)
 			Position = UDim2.new(1, -fromRight, 0.5, 0),
 			Size = UDim2.fromOffset(SIZE, SIZE),
 			BackgroundColor3 = THEME.Card,
-			BackgroundTransparency = flat and 1 or 0.94,
+			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Text = "",
 			ZIndex = 8,
 			Parent = frame,
-		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.88) })
+		}, { corner(8) })
 		local img, glyph
 		if type(b.Icon) == "string" and b.Icon ~= "" then
 			img = new("ImageLabel", {
@@ -1747,12 +1748,10 @@ function Library.BuildInlineButtons(frame, box, buttons, getText, flat)
 			})
 		end
 		btn.MouseEnter:Connect(function()
-			tween(btn, 0.15, { BackgroundTransparency = flat and 0.9 or 0.82 })
 			if img then tween(img, 0.15, { ImageTransparency = 0 }) end
 			if glyph then tween(glyph, 0.15, { TextColor3 = THEME.Text }) end
 		end)
 		btn.MouseLeave:Connect(function()
-			tween(btn, 0.15, { BackgroundTransparency = flat and 1 or 0.94 })
 			if img then tween(img, 0.15, { ImageTransparency = 0.25 }) end
 			if glyph then tween(glyph, 0.15, { TextColor3 = THEME.SubText }) end
 		end)
@@ -2220,11 +2219,12 @@ function Library:CreateSidePanel(opts)
 	local avatar = new("ImageLabel", {
 		Size = UDim2.fromOffset(54, 54),
 		BackgroundColor3 = THEME.Switch,
+		BackgroundTransparency = 1,
 		Image = DEFAULT_AVATAR,
 		LayoutOrder = 0,
 		ZIndex = 4,
 		Parent = body,
-	}, { round(), stroke(Color3.new(1, 1, 1), 0.85) })
+	}, { round() })
 	local avatarWrap = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 62),
 		BackgroundTransparency = 1,
@@ -2987,7 +2987,7 @@ function Library:Notify(title, text, durationOrOpts)
 		Parent = card,
 	})
 
-	local bareIcon = opts.BareIcon == true
+	local bareIcon = opts.BareIcon ~= false
 	local avatar = new("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 0, 0.5, 0),
@@ -5209,7 +5209,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 6
+Library.Version = 7
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
@@ -6324,9 +6324,10 @@ function Tab:AddPlayerSearch(opts)
 			Position = UDim2.new(0, 6, 0.5, 0),
 			Size = UDim2.fromOffset(28, 28),
 			BackgroundColor3 = THEME.Switch,
+			BackgroundTransparency = 1,
 			ZIndex = 7,
 			Parent = row,
-		}, { round(), stroke(Color3.new(1, 1, 1), 0.85) })
+		}, { round() })
 		slot.nameLbl = label({
 			Text = "", Font = FONT_MEDIUM, TextSize = 13, TextColor3 = THEME.Text,
 			Position = UDim2.fromOffset(42, 5), Size = UDim2.new(1, -(52 + statusW), 0, 16),
