@@ -179,7 +179,17 @@ local function getTweenInfo(time, style, direction)
 	return info
 end
 
+local INSTANT_TWEEN = {
+	Cancel = function() end,
+	Pause = function() end,
+	Play = function() end,
+	Completed = { Connect = function() return { Disconnect = function() end } end, Once = function() return { Disconnect = function() end } end, Wait = function() end },
+}
 local function tween(obj, time, props, style, direction)
+	if not time or time <= 0 then
+		for k, v in pairs(props) do obj[k] = v end
+		return INSTANT_TWEEN
+	end
 	local t = TweenService:Create(
 		obj,
 		getTweenInfo(time, style or Enum.EasingStyle.Quint, direction or Enum.EasingDirection.Out),
@@ -1083,12 +1093,14 @@ function Library.new(config)
 	self.Dock.InputBegan:Connect(function(input)
 		if not isPress(input) then return end
 		dragging = true
+		self._windowDragging = true
 		dragStart = input.Position
 		startPos = self.TargetPosition
 		local conn
 		conn = input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
 				dragging = false
+				self._windowDragging = false
 				conn:Disconnect()
 			end
 		end)
@@ -2474,6 +2486,10 @@ function Library:CreateSidePanel(opts)
 		if dragging or detached then return end
 
 		if shown then target = dockTopLeft() end
+		if win._windowDragging and shown then
+			setAbs(target)
+			return
+		end
 		local cur = root.AbsolutePosition
 		local dx, dy = target.X - cur.X, target.Y - cur.Y
 		if dx * dx + dy * dy < 0.25 then
@@ -2586,13 +2602,22 @@ function Library:CreateSidePanel(opts)
 	})
 
 	local dragStart = nil
-	local grabOffset = nil
 	local DETACH_THRESHOLD = 20
 	local DOCK_SNAP_RADIUS = 130
+	local baseMouse, baseAbs, basePos, lastMouse
+
+	local function rebase(mouse)
+		baseMouse = mouse
+		baseAbs = root.AbsolutePosition
+		basePos = root.Position
+		lastMouse = mouse
+	end
 
 	local function followCursor(mouse)
-		if not grabOffset then return end
-		setAbs(mouse - grabOffset)
+		if not basePos then return end
+		lastMouse = mouse
+		local d = mouse - baseMouse
+		root.Position = UDim2.fromOffset(basePos.X.Offset + d.X, basePos.Y.Offset + d.Y)
 	end
 
 	local rootStroke = root:FindFirstChildOfClass("UIStroke")
@@ -2642,8 +2667,16 @@ function Library:CreateSidePanel(opts)
 		end
 	end
 
-	local function nearDock()
-		return mainVisible() and (root.AbsolutePosition - dockTopLeft()).Magnitude < DOCK_SNAP_RADIUS
+	local slotCache, slotAt = nil, 0
+	local function nearDock(fresh)
+		if not mainVisible() or not baseAbs then return false end
+		local now = os.clock()
+		if fresh or not slotCache or now - slotAt > 0.12 then
+			slotCache = dockTopLeft()
+			slotAt = now
+		end
+		local abs = baseAbs + (lastMouse - baseMouse)
+		return (abs - slotCache).Magnitude < DOCK_SNAP_RADIUS
 	end
 
 	dragHandle.InputBegan:Connect(function(input)
@@ -2651,13 +2684,13 @@ function Library:CreateSidePanel(opts)
 		if dragging then return end
 		dragging = true
 		dragStart = Vector2.new(input.Position.X, input.Position.Y)
-		grabOffset = dragStart - root.AbsolutePosition
+		if detached then rebase(dragStart) end
 		local conn
 		conn = input.Changed:Connect(function()
 			if input.UserInputState ~= Enum.UserInputState.End then return end
 			conn:Disconnect()
 			dragging = false
-			local snap = detached and nearDock()
+			local snap = detached and nearDock(true)
 			setSnapHint(false)
 			if not detached then return end
 			if snap then
@@ -2672,8 +2705,8 @@ function Library:CreateSidePanel(opts)
 		local mouse = Vector2.new(input.Position.X, input.Position.Y)
 		if not detached then
 			if (mouse - dragStart).Magnitude > DETACH_THRESHOLD then
-				grabOffset = dragStart - root.AbsolutePosition
 				detach()
+				rebase(dragStart)
 				followCursor(mouse)
 			end
 			return
@@ -4903,10 +4936,10 @@ function Tab:AddSlider(opts)
 		api.Chip = chipApi
 	end
 
+	local trackPos, trackSize = 0, 0
 	local function setFromX(x)
-		local pos, size = track.AbsolutePosition.X, track.AbsoluteSize.X
-		if size <= 0 then return end
-		api:Set(min + (max - min) * math.clamp((x - pos) / size, 0, 1), true)
+		if trackSize <= 0 then return end
+		api:Set(min + (max - min) * math.clamp((x - trackPos) / trackSize, 0, 1), true)
 	end
 
 	frame.MouseEnter:Connect(function()
@@ -4919,6 +4952,7 @@ function Tab:AddSlider(opts)
 	hit.InputBegan:Connect(function(input)
 		if not isPress(input) then return end
 		dragging = true
+		trackPos, trackSize = track.AbsolutePosition.X, track.AbsoluteSize.X
 		playSound(SOUND_CLICK, 0.25, 1.1)
 		tween(knob, 0.25, { Size = UDim2.fromOffset(16, 16) }, Enum.EasingStyle.Back)
 		tween(valueLabel, 0.2, { TextColor3 = THEME.Text })
@@ -5035,7 +5069,7 @@ function Tab:AddDropdown(opts)
 	local hasChip = type(opts.Chip) == "string"
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
-	local currentRightInset = 34
+	local currentRightInset = 50
 	if hasChip then
 		currentRightInset = 130
 		chipBtn = new("TextButton", {
