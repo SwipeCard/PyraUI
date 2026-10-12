@@ -83,7 +83,7 @@ local FONT_MEDIUM = Enum.Font.GothamBold
 local FONT_BOLD   = Enum.Font.GothamBold
 local TEXT_RIGHT  = 37
 local ICON_CHIP_RIGHT = TEXT_RIGHT
-local HOLD_RIGHT = 40
+local HOLD_RIGHT = 41
 
 local LOGO_ID = "rbxassetid://138576850849681"
 local DOCK_TABS_X = 52
@@ -1231,7 +1231,7 @@ function Library.new(config)
 
 	table.insert(self.Connections, UserInputService.InputBegan:Connect(function(input, processed)
 		if processed then return end
-		if input.KeyCode == self.ToggleKey then self:Toggle() end
+		if input.KeyCode == self.ToggleKey or input.UserInputType == self.ToggleKey then self:Toggle() end
 	end))
 	table.insert(self.Connections, camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 		if self.Open then tween(self.UIScale, 0.3, { Scale = self:_fitScale() }) end
@@ -1390,7 +1390,7 @@ function Library:Hide()
 	if self.SidePanels then
 		for _, p in ipairs(self.SidePanels) do pcall(p._uiHidden, p) end
 	end
-	self:Notify("Interface hidden", "Press " .. self.ToggleKey.Name .. " to open it again.", 5)
+	self:Notify("Interface hidden", "Press " .. keyName(self.ToggleKey) .. " to open it again.", 5)
 end
 
 function Library:Toggle()
