@@ -5060,7 +5060,7 @@ function Tab:AddDropdown(opts)
 	local hasChip = type(opts.Chip) == "string"
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
-	local currentRightInset = -25
+	local currentRightInset = 58
 	if hasChip then
 		currentRightInset = 130
 		chipBtn = new("TextButton", {
@@ -5106,7 +5106,7 @@ function Tab:AddDropdown(opts)
 	local arrow
 	if arrowUseIcon then
 		arrow = new("ImageLabel", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -7, 0, HEADER / 2),
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -9, 0, HEADER / 2),
 			Size = UDim2.fromOffset(24, 16), BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Arrow, ImageColor3 = THEME.Body, ZIndex = 4, Parent = frame,
