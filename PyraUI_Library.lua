@@ -281,6 +281,33 @@ local function beginDrag(window, move, stop)
 	bus.active = { move = move, stop = stop }
 end
 
+local function pollDrag(input, onFrame, onEnd)
+	local isTouch = input.UserInputType == Enum.UserInputType.Touch
+	local function pointer()
+		if isTouch then return Vector2.new(input.Position.X, input.Position.Y) end
+		return UserInputService:GetMouseLocation()
+	end
+	local startPoint = pointer()
+	local finished = false
+	local conn
+	local function finish()
+		if finished then return end
+		finished = true
+		if conn then conn:Disconnect() end
+		if onEnd then onEnd() end
+	end
+	conn = RunService.RenderStepped:Connect(function()
+		if finished then return end
+		if input.UserInputState == Enum.UserInputState.End
+			or (not isTouch and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)) then
+			finish()
+			return
+		end
+		onFrame(pointer() - startPoint)
+	end)
+	return finish
+end
+
 local function keyBus(window)
 	local bus = window._KeyBus
 	if bus then return bus end
@@ -1091,29 +1118,20 @@ function Library.new(config)
 
 	local dragging, dragStart, startPos = false, nil, nil
 	self.Dock.InputBegan:Connect(function(input)
-		if not isPress(input) then return end
+		if not isPress(input) or dragging then return end
 		dragging = true
 		self._windowDragging = true
-		dragStart = input.Position
-		startPos = self.TargetPosition
-		local conn
-		conn = input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-				self._windowDragging = false
-				conn:Disconnect()
-			end
+		local origin = self.TargetPosition
+		pollDrag(input, function(d)
+			local pos = UDim2.new(origin.X.Scale, origin.X.Offset + d.X, origin.Y.Scale, origin.Y.Offset + d.Y)
+			self.TargetPosition = pos
+			self.Base = pos
+			self.Holder.Position = pos + UDim2.fromOffset(self.Parallax.X, self.Parallax.Y)
+		end, function()
+			dragging = false
+			self._windowDragging = false
 		end)
 	end)
-	table.insert(self.Connections, UserInputService.InputChanged:Connect(function(input)
-		if dragging and isMove(input) then
-			local delta = input.Position - dragStart
-			self.TargetPosition = UDim2.new(
-				startPos.X.Scale, startPos.X.Offset + delta.X,
-				startPos.Y.Scale, startPos.Y.Offset + delta.Y
-			)
-		end
-	end))
 
 	local glassWasOn = false
 	local lastShadow = Vector2.new(math.huge, 0)
@@ -1544,20 +1562,22 @@ function Library:OnToggleKeyChanged(fn)
 end
 
 function Library.BindMonitorDrag(bar, home, rowAt, connections, onDrag)
-	local active, dragging, moved, startPos, startOff = nil, false, false, nil, nil
+	local active = false
 	local function press(input, row)
-		if not isPress(input) or active == input then return end
-		active = input
-		dragging = true
-		moved = false
-		startPos = Vector2.new(input.Position.X, input.Position.Y)
-		startOff = Vector2.new(bar.Position.X.Offset, bar.Position.Y.Offset)
-		local conn
-		conn = input.Changed:Connect(function()
-			if input.UserInputState ~= Enum.UserInputState.End then return end
-			conn:Disconnect()
-			active = nil
-			dragging = false
+		if not isPress(input) or active then return end
+		active = true
+		local moved = false
+		local startPos = Vector2.new(input.Position.X, input.Position.Y)
+		local startOff = Vector2.new(bar.Position.X.Offset, bar.Position.Y.Offset)
+		pollDrag(input, function(d)
+			if not moved and d.Magnitude < 4 then return end
+			if not moved then
+				moved = true
+				if onDrag then onDrag(true) end
+			end
+			bar.Position = UDim2.new(home.X.Scale, startOff.X + d.X, home.Y.Scale, startOff.Y + d.Y)
+		end, function()
+			active = false
 			if onDrag then onDrag(false) end
 			if not moved then
 				local target = row or rowAt(startPos.Y)
@@ -1565,16 +1585,6 @@ function Library.BindMonitorDrag(bar, home, rowAt, connections, onDrag)
 			end
 		end)
 	end
-	table.insert(connections, UserInputService.InputChanged:Connect(function(input)
-		if not dragging or not isMove(input) then return end
-		local d = Vector2.new(input.Position.X, input.Position.Y) - startPos
-		if not moved and d.Magnitude < 4 then return end
-		if not moved then
-			moved = true
-			if onDrag then onDrag(true) end
-		end
-		bar.Position = UDim2.new(home.X.Scale, startOff.X + d.X, home.Y.Scale, startOff.Y + d.Y)
-	end))
 	bar.InputBegan:Connect(function(input) press(input, nil) end)
 	return press
 end
@@ -2601,23 +2611,14 @@ function Library:CreateSidePanel(opts)
 		Parent = root,
 	})
 
-	local dragStart = nil
 	local DETACH_THRESHOLD = 20
 	local DOCK_SNAP_RADIUS = 130
-	local baseMouse, baseAbs, basePos, lastMouse
+	local baseAbs, basePos
+	local lastDelta = Vector2.zero
 
-	local function rebase(mouse)
-		baseMouse = mouse
+	local function rebase()
 		baseAbs = root.AbsolutePosition
 		basePos = root.Position
-		lastMouse = mouse
-	end
-
-	local function followCursor(mouse)
-		if not basePos then return end
-		lastMouse = mouse
-		local d = mouse - baseMouse
-		root.Position = UDim2.fromOffset(basePos.X.Offset + d.X, basePos.Y.Offset + d.Y)
 	end
 
 	local rootStroke = root:FindFirstChildOfClass("UIStroke")
@@ -2675,20 +2676,24 @@ function Library:CreateSidePanel(opts)
 			slotCache = dockTopLeft()
 			slotAt = now
 		end
-		local abs = baseAbs + (lastMouse - baseMouse)
-		return (abs - slotCache).Magnitude < DOCK_SNAP_RADIUS
+		return (baseAbs + lastDelta - slotCache).Magnitude < DOCK_SNAP_RADIUS
 	end
 
 	dragHandle.InputBegan:Connect(function(input)
-		if not isPress(input) then return end
-		if dragging then return end
+		if not isPress(input) or dragging then return end
 		dragging = true
-		dragStart = Vector2.new(input.Position.X, input.Position.Y)
-		if detached then rebase(dragStart) end
-		local conn
-		conn = input.Changed:Connect(function()
-			if input.UserInputState ~= Enum.UserInputState.End then return end
-			conn:Disconnect()
+		lastDelta = Vector2.zero
+		if detached then rebase() end
+		pollDrag(input, function(d)
+			lastDelta = d
+			if not detached then
+				if d.Magnitude <= DETACH_THRESHOLD then return end
+				detach()
+				rebase()
+			end
+			root.Position = UDim2.fromOffset(basePos.X.Offset + d.X, basePos.Y.Offset + d.Y)
+			setSnapHint(nearDock())
+		end, function()
 			dragging = false
 			local snap = detached and nearDock(true)
 			setSnapHint(false)
@@ -2700,20 +2705,6 @@ function Library:CreateSidePanel(opts)
 			end
 		end)
 	end)
-	table.insert(self.Connections, UserInputService.InputChanged:Connect(function(input)
-		if not dragging or not isMove(input) then return end
-		local mouse = Vector2.new(input.Position.X, input.Position.Y)
-		if not detached then
-			if (mouse - dragStart).Magnitude > DETACH_THRESHOLD then
-				detach()
-				rebase(dragStart)
-				followCursor(mouse)
-			end
-			return
-		end
-		followCursor(mouse)
-		setSnapHint(nearDock())
-	end))
 
 	function panel:_uiHidden()
 		if pinned then panel._wasVisible = false return end
@@ -5069,7 +5060,7 @@ function Tab:AddDropdown(opts)
 	local hasChip = type(opts.Chip) == "string"
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
-	local currentRightInset = 50
+	local currentRightInset = 58
 	if hasChip then
 		currentRightInset = 130
 		chipBtn = new("TextButton", {
@@ -6735,29 +6726,21 @@ function Library:CreatePanel(opts)
 	local order = 0
 	local function nextOrder() order += 1 return order end
 
-	local dragging, dragStart, startPos = false, Vector2.new(), root.Position
+	local dragging = false
 	local dragBtn = new("TextButton", {
 		Size = UDim2.new(1, -90, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false,
 		Text = "", Active = true, ZIndex = 3, Parent = header,
 	})
 	dragBtn.InputBegan:Connect(function(input)
-		if isPress(input) then
-			dragging = true
-			dragStart = Vector2.new(input.Position.X, input.Position.Y)
-			startPos = root.Position
-		end
+		if not isPress(input) or dragging then return end
+		dragging = true
+		local origin = root.Position
+		pollDrag(input, function(d)
+			root.Position = UDim2.new(origin.X.Scale, origin.X.Offset + d.X, origin.Y.Scale, origin.Y.Offset + d.Y)
+		end, function()
+			dragging = false
+		end)
 	end)
-	local dragMove = UserInputService.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			local d = Vector2.new(input.Position.X, input.Position.Y) - dragStart
-			root.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-		end
-	end)
-	local dragEnd = UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
-	end)
-	table.insert(self.Connections, dragMove)
-	table.insert(self.Connections, dragEnd)
 
 	local open = false
 	local fadeTok = 0
