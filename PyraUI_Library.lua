@@ -206,7 +206,7 @@ local function new(className, props, children)
 	return inst
 end
 
-local function corner(radius) return new("UICorner", { CornerRadius = UDim.new(0, radius > 3 and radius - 2 or radius) }) end
+local function corner(radius) return new("UICorner", { CornerRadius = UDim.new(0, math.max(1, radius - 3)) }) end
 local function round() return new("UICorner", { CornerRadius = UDim.new(1, 0) }) end
 local function stroke(color, transparency, thickness)
 	return new("UIStroke", {
@@ -717,7 +717,7 @@ function Library.new(config)
 			img = new("ImageLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromOffset(18, 18),
+				Size = UDim2.fromOffset(22, 22),
 				BackgroundTransparency = 1,
 				ImageTransparency = 0,
 				Image = iconId,
@@ -737,20 +737,20 @@ function Library.new(config)
 		end)
 		return b
 	end
-	local closeButton = dockButton("×", -8, ICONS.Close)
-	self.MinButton = dockButton("-", -40, ICONS.Minimize)
+	local closeButton = dockButton("×", -6, ICONS.Close)
+	self.MinButton = dockButton("-", -34, ICONS.Minimize)
 	self.MinButtonIcon = self.MinButton:FindFirstChildOfClass("ImageLabel")
 	closeButton.Activated:Connect(function() self:Hide() end)
 	self.MinButton.Activated:Connect(function() self:SetMinimized(not self.Minimized) end)
 
 	self.SearchIndex = {}
 	local searchOpen = false
-	local SEARCH_W = 110
+	local SEARCH_W = 120
 
 	local search = new("Frame", {
 		Name = "Search",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -78, 0.5, 0),
+		Position = UDim2.new(1, -60, 0.5, 0),
 		Size = UDim2.fromOffset(28, 28),
 		BackgroundTransparency = 1,
 		ZIndex = 8,
@@ -769,7 +769,7 @@ function Library.new(config)
 	if useSearchIcon then
 		searchImg = new("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = ICON_POS,
-			Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromOffset(24, 24), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Search, ImageColor3 = THEME.Body, ZIndex = 9, Parent = search,
 		})
 		icon:GetPropertyChangedSignal("TextColor3"):Connect(function()
@@ -1694,7 +1694,7 @@ function Library:_refreshMonitorSeparators()
 end
 
 function Library.BuildInlineButtons(frame, box, buttons, getText, flat)
-	local SIZE, GAP, EDGE = 30, 6, 12
+	local SIZE, GAP, EDGE = 30, 2, 6
 	local n = #buttons
 	box.Position = UDim2.new(1, -(EDGE + n * (SIZE + GAP)), 0.5, 0)
 	for j, b in ipairs(buttons) do
@@ -1714,7 +1714,7 @@ function Library.BuildInlineButtons(frame, box, buttons, getText, flat)
 		if type(b.Icon) == "string" and b.Icon ~= "" then
 			img = new("ImageLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromOffset(22, 22), BackgroundTransparency = 1,
+				Size = UDim2.fromOffset(26, 26), BackgroundTransparency = 1,
 				Image = b.Icon, ImageTransparency = 0.25, ScaleType = Enum.ScaleType.Fit,
 				ZIndex = 9, Parent = btn,
 			})
@@ -1852,13 +1852,13 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 			ClearTextOnFocus = false,
 			Font = FONT, TextSize = 13, TextColor3 = THEME.Body,
 			PlaceholderText = o.Placeholder or "",
-			PlaceholderColor3 = THEME.Muted,
+			PlaceholderColor3 = THEME.SubText,
 			Text = tostring(o.Default or ""),
-			TextXAlignment = Enum.TextXAlignment.Left,
+			TextXAlignment = Enum.TextXAlignment.Right,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ClipsDescendants = true,
 			ZIndex = 6, Parent = wrap,
-		}, { corner(6), stroke(Color3.new(1, 1, 1), 0.78), pad(0, 8, 0, 8) })
+		}, { pad(0, 8, 0, 8) })
 		box.FocusLost:Connect(function() fire(o.Callback, box.Text) end)
 		if btnCount > 0 then
 			Library.BuildInlineButtons(wrap, box, o.Buttons, function() return box.Text end, true)
@@ -4074,6 +4074,7 @@ function Tab:AddToggle(opts)
 	if noSwitch then inset = math.max(inset - 48, 50) end
 	local inlineRow
 	local iconToggle = opts.IconToggle == true and type(opts.Icon) == "string" and opts.Icon ~= ""
+	if iconToggle and not noSwitch then rightPad = 46 end
 	if sliderOpts then
 		label({
 			Text = opts.Name or "Toggle", Font = FONT_MEDIUM, TextSize = 13,
@@ -4148,7 +4149,7 @@ function Tab:AddToggle(opts)
 
 		bigIcon = new("ImageLabel", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -15 + (opts.IconOffsetX or 0), 0.5, 0),
+			Position = UDim2.new(1, -15 + (opts.IconOffsetX or 6), 0.5, 0),
 			Size = UDim2.fromOffset(34, 34),
 			BackgroundTransparency = 1,
 			Image = opts.Icon,
@@ -4373,7 +4374,7 @@ function Tab:AddToggle(opts)
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_MEDIUM,
-			TextSize = 11,
+			TextSize = 12,
 			TextColor3 = THEME.Body,
 			ZIndex = 7,
 			Parent = frame,
@@ -4404,14 +4405,14 @@ function Tab:AddToggle(opts)
 
 	if hasChip then
 		local chipState = opts.ChipDefault == true
-		local chipW = type(opts.Chip) == "string" and (#opts.Chip > 3) and (18 + #opts.Chip * 6) or 42
+		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 12, FONT_BOLD)) + 10
 		local chipX = -rightPad
 		local chipProps = {
 			Size = UDim2.fromOffset(chipW, 20),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = 10,
+			TextSize = 12,
 			TextColor3 = chipState and THEME.Text or THEME.ChipOff,
 			Text = opts.Chip,
 			ZIndex = 7,
@@ -4445,7 +4446,7 @@ function Tab:AddToggle(opts)
 		if opts.Indicator and not inlineRow then
 			dot = new("Frame", {
 				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, chipX - chipW - 8, 0.5, 0),
+				Position = UDim2.new(1, chipX - chipW - 5, 0.5, 0),
 				Size = UDim2.fromOffset(8, 8),
 				BackgroundColor3 = STATUS_GREEN,
 				BackgroundTransparency = 1,
@@ -4462,9 +4463,9 @@ function Tab:AddToggle(opts)
 
 		if hasKey and keyChipRef and not inlineRow then
 			local function reposition()
-				local x = -rightPad - keyChipRef.AbsoluteSize.X - 6
+				local x = -rightPad - keyChipRef.AbsoluteSize.X - 2
 				chip.Position = UDim2.new(1, x, 0.5, 0)
-				if dot then dot.Position = UDim2.new(1, x - chipW - 8, 0.5, 0) end
+				if dot then dot.Position = UDim2.new(1, x - chipW - 5, 0.5, 0) end
 			end
 			keyChipRef:GetPropertyChangedSignal("AbsoluteSize"):Connect(reposition)
 			task.defer(reposition)
@@ -4820,15 +4821,15 @@ function Tab:AddSlider(opts)
 
 	if type(opts.Chip) == "string" then
 		local chipState = opts.ChipDefault == true
-		local chipW = (#opts.Chip > 3) and (18 + #opts.Chip * 6) or 42
+		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 12, FONT_BOLD)) + 10
 		local chip = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -8 - 88 - 8, 0, 5),
+			Position = UDim2.new(1, -8 - 88 - 2, 0, 5),
 			Size = UDim2.fromOffset(chipW, 20),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = 10,
+			TextSize = 12,
 			TextColor3 = chipState and THEME.Text or THEME.ChipOff,
 			Text = opts.Chip,
 			ZIndex = 7,
@@ -5173,7 +5174,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 9
+Library.Version = 10
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
@@ -5585,7 +5586,7 @@ function Tab:AddRandomSlider(opts)
 		new("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
 			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, 8),
+			Padding = UDim.new(0, 4),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
@@ -5608,7 +5609,7 @@ function Tab:AddRandomSlider(opts)
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Font = FONT_BOLD,
-		TextSize = 10,
+		TextSize = 12,
 		TextColor3 = randomize and THEME.Text or THEME.ChipOff,
 		Text = "RANDOM",
 		ZIndex = 7,
@@ -5618,14 +5619,14 @@ function Tab:AddRandomSlider(opts)
 	local extraChip
 	if type(opts.Chip) == "string" then
 		local st = opts.ChipDefault == true
-		local w = (#opts.Chip > 3) and (18 + #opts.Chip * 6) or 42
+		local w = math.ceil(Library.MeasureText(tostring(opts.Chip), 12, FONT_BOLD)) + 10
 		extraChip = new("TextButton", {
 			Size = UDim2.fromOffset(w, 20),
 			LayoutOrder = 3,
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = 10,
+			TextSize = 12,
 			TextColor3 = st and THEME.Text or THEME.ChipOff,
 			Text = opts.Chip,
 			ZIndex = 7,
@@ -5860,7 +5861,7 @@ function Tab:AddKeybind(opts)
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Font = FONT_MEDIUM,
-		TextSize = 12,
+		TextSize = 13,
 		TextColor3 = THEME.Body,
 		ZIndex = 6,
 		Parent = frame,
@@ -5923,21 +5924,21 @@ function Tab:AddInput(opts)
 		Position = UDim2.new(1, -12, 0.5, 0),
 		Size = UDim2.fromOffset(boxW, 24),
 		BackgroundColor3 = THEME.Card,
-		BackgroundTransparency = isSearch and 1 or 0.94,
+		BackgroundTransparency = 1,
 		ClearTextOnFocus = false,
 		Font = FONT,
 		TextSize = 12,
 		TextColor3 = THEME.Text,
 		PlaceholderText = opts.Placeholder or "Type here...",
-		PlaceholderColor3 = THEME.Muted,
+		PlaceholderColor3 = isSearch and THEME.Muted or THEME.SubText,
 		Text = tostring(opts.Default or ""),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = isSearch and Enum.TextXAlignment.Left or Enum.TextXAlignment.Right,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextEditable = not isSearch,
 		ClipsDescendants = true,
 		ZIndex = 6,
 		Parent = frame,
-	}, { corner(6), stroke(Color3.new(1, 1, 1), isSearch and 1 or 0.88), pad(0, isSearch and 30 or 8, 0, 8) })
+	}, isSearch and { corner(6), stroke(Color3.new(1, 1, 1), 1), pad(0, 30, 0, 8) } or { pad(0, 8, 0, 8) })
 	local boxStroke = box:FindFirstChildOfClass("UIStroke")
 	hoverable(frame, frame)
 
@@ -6062,7 +6063,7 @@ function Tab:AddInput(opts)
 	end
 
 	box.Focused:Connect(function()
-		tween(boxStroke, 0.2, { Transparency = 0.4 })
+		if boxStroke then tween(boxStroke, 0.2, { Transparency = 0.4 }) end
 		if not isSearch then tween(box, 0.2, { BackgroundTransparency = 0.9 }) end
 		if hasPicker then runPicker() end
 	end)
@@ -6072,7 +6073,7 @@ function Tab:AddInput(opts)
 		end)
 	end
 	box.FocusLost:Connect(function(enter)
-		tween(boxStroke, 0.2, { Transparency = isSearch and (searchOpen and 0.82 or 1) or 0.88 })
+		if boxStroke then tween(boxStroke, 0.2, { Transparency = isSearch and (searchOpen and 0.82 or 1) or 0.88 }) end
 		if not isSearch then tween(box, 0.2, { BackgroundTransparency = 0.94 }) end
 		task.wait(0.15)
 		if picker and not picker.Visible then else if picker then picker.Visible = false end end
@@ -6147,9 +6148,9 @@ function Tab:AddPlayerSearch(opts)
 	end)
 
 	local searchBtn = new("TextButton", {
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 8),
-		Size = UDim2.fromOffset(24, 24),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -20, 0.5, 0),
+		Size = UDim2.fromOffset(32, 32),
 		BackgroundColor3 = THEME.Card,
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
@@ -6161,7 +6162,7 @@ function Tab:AddPlayerSearch(opts)
 	if useSearchIcon then
 		new("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromOffset(24, 24), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Search, ImageColor3 = THEME.Body, ZIndex = 8, Parent = searchBtn,
 		})
 	else
