@@ -84,7 +84,6 @@ local FONT_BOLD   = Enum.Font.GothamBold
 local TEXT_RIGHT  = 37
 local ICON_CHIP_RIGHT = TEXT_RIGHT
 local HOLD_RIGHT = 31
-local HOLD_KEY_GAP = 6
 
 local LOGO_ID = "rbxassetid://138576850849681"
 local DOCK_TABS_X = 52
@@ -4557,11 +4556,6 @@ function Tab:AddToggle(opts)
 				local x = -rightPad - keyChipRef.AbsoluteSize.X
 				if noSwitch then
 					x = chipX
-					local textW = Library.MeasureText(keyChipRef.Text, 16, FONT_BOLD)
-					local keyW = math.max(textW + 8, 24)
-					if keyW > 24 then
-						x = math.min(chipX, -rightPad - keyW + 4 - HOLD_KEY_GAP)
-					end
 				elseif iconToggle then
 					local keyW = Library.MeasureText(keyChipRef.Text, 11, FONT_MEDIUM) + 16
 					x = math.min(chipX, -(rightPad - (opts.KeyOffsetX or 0)) - keyW - 2)
