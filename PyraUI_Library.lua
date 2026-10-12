@@ -2874,7 +2874,7 @@ function Library:AddMobileButton(opts)
 	local dot, stateLbl
 	if isToggle then
 		dot = new("Frame", {
-			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 24, 0.5, 0),
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 24, 0, 31),
 			Size = UDim2.fromOffset(24, 24), BackgroundColor3 = state and STATUS_GREEN or THEME.Switch,
 			BorderSizePixel = 0, Parent = btn,
 		}, { round() })
@@ -2887,9 +2887,10 @@ function Library:AddMobileButton(opts)
 	})
 	if isToggle then
 		stateLbl = label({
-			Text = state and "ON" or "OFF", Font = FONT_BOLD, TextSize = 16,
+			Text = state and "ON" or "OFF", Font = FONT_BOLD, TextSize = 20,
 			TextColor3 = state and STATUS_GREEN or THEME.Muted,
-			Position = UDim2.fromOffset(64, 50), Size = UDim2.new(1, -78, 0, 24),
+			TextXAlignment = Enum.TextXAlignment.Center,
+			Position = UDim2.fromOffset(12, 54), Size = UDim2.fromOffset(48, 26),
 			Parent = btn,
 		})
 	end
