@@ -4187,7 +4187,7 @@ function Tab:AddToggle(opts)
 				new("UIListLayout", {
 					FillDirection = Enum.FillDirection.Horizontal,
 					VerticalAlignment = Enum.VerticalAlignment.Center,
-					Padding = UDim.new(0, 8),
+					Padding = UDim.new(0, 4),
 					SortOrder = Enum.SortOrder.LayoutOrder,
 				}),
 			})
