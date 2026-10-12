@@ -122,7 +122,7 @@ task.spawn(function()
 	for _, a in ipairs(assets) do a:Destroy() end
 end)
 
-local WINDOW_W = 600
+local WINDOW_W = 570
 local DOCK_H   = 44
 local GAP      = 8
 local PANEL_H  = 380
@@ -745,7 +745,7 @@ function Library.new(config)
 
 	self.SearchIndex = {}
 	local searchOpen = false
-	local SEARCH_W = 120
+	local SEARCH_W = 100
 
 	local search = new("Frame", {
 		Name = "Search",
@@ -785,8 +785,8 @@ function Library.new(config)
 		Font = FONT,
 		TextSize = 12,
 		TextColor3 = THEME.Text,
-		PlaceholderText = "Search settings...",
-		PlaceholderColor3 = THEME.Muted,
+		TextTransparency = 1,
+		PlaceholderText = "",
 		Text = "",
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextEditable = false,
@@ -794,6 +794,31 @@ function Library.new(config)
 		ZIndex = 9,
 		Parent = search,
 	})
+	local searchTextHolder = new("Frame", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(0, -6, 0, 0),
+		Size = UDim2.fromOffset(SEARCH_W, 28),
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		Visible = false,
+		ZIndex = 9,
+		Parent = search,
+	})
+	local searchText = label({
+		Text = "Search settings...", Font = FONT, TextSize = 12, TextColor3 = THEME.Muted,
+		Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Right,
+		ZIndex = 9, Parent = searchTextHolder,
+	})
+	local function syncSearchText()
+		local t = searchBox.Text
+		if t == "" then
+			searchText.Text = "Search settings..."
+			searchText.TextColor3 = THEME.Muted
+		else
+			searchText.Text = t
+			searchText.TextColor3 = THEME.Text
+		end
+	end
 	local iconBtn = new("TextButton", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 10, Parent = search,
 	})
@@ -814,6 +839,8 @@ function Library.new(config)
 		if open then
 			searchBox.Visible = true
 			searchBox.TextEditable = true
+			searchTextHolder.Visible = true
+			syncSearchText()
 			tween(icon, 0.2, { TextColor3 = THEME.Text })
 			task.defer(function() if searchOpen then searchBox:CaptureFocus() end end)
 			playSound(SOUND_CLICK, 0.22, 1.1)
@@ -821,6 +848,7 @@ function Library.new(config)
 			searchBox.Text = ""
 			searchBox.TextEditable = false
 			searchBox.Visible = false
+			searchTextHolder.Visible = false
 			tween(icon, 0.2, { TextColor3 = THEME.SubText })
 			self:_hideSearchPage()
 		end
@@ -840,6 +868,7 @@ function Library.new(config)
 	end)
 	local searchToken = 0
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		syncSearchText()
 		local q = searchBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
 		searchToken += 1
 		local token = searchToken
@@ -992,13 +1021,21 @@ function Library.new(config)
 		):Play()
 	end
 	local premiumLabel = label({
-		Text = "P R E M I U M", Font = FONT_BOLD, TextSize = 11,
-		TextColor3 = Color3.fromRGB(240, 200, 60),
-		TextTransparency = 0.1,
+		Text = "Premium", Font = FONT_BOLD, TextSize = 13,
+		TextColor3 = Color3.new(1, 1, 1),
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 70, 0, 33), Size = UDim2.fromOffset(0, 16),
+		Position = UDim2.new(0, 67, 0, 33), Size = UDim2.fromOffset(0, 16),
 		TextYAlignment = Enum.TextYAlignment.Center,
 		AutomaticSize = Enum.AutomaticSize.X, ZIndex = 3, Parent = self.Footer,
+	})
+	new("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 232, 150)),
+			ColorSequenceKeypoint.new(0.55, Color3.fromRGB(246, 196, 70)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(212, 148, 32)),
+		}),
+		Parent = premiumLabel,
 	})
 
 	local footerChips = {}
@@ -1375,7 +1412,7 @@ function Library.ComputeFooterLayout(W, nameW, premiumW, chipWs)
 	local n = #chipWs
 	local chipsTotal = CHIP_GAP * math.max(n - 1, 0)
 	for i = 1, n do chipsTotal = chipsTotal + chipWs[i] end
-	local identMin = math.max(NAME_X + math.min(nameW, MIN_NAME), 70 + premiumW)
+	local identMin = math.max(NAME_X + math.min(nameW, MIN_NAME), 67 + premiumW)
 	local out = { chips = {}, ruleY = TOP_H - 1 }
 
 	if identMin + IDENT_GAP + chipsTotal + PAD <= W then
@@ -1447,7 +1484,7 @@ function Library:_layoutFooter(W)
 		widths[i] = math.ceil(math.max(capW, valW)) + 2
 	end
 	local nameW = math.ceil(Library.MeasureText(info.nameLabel.Text, 13, FONT_BOLD)) + 2
-	local premiumW = math.ceil(Library.MeasureText(info.premiumLabel.Text, 11, FONT_BOLD)) + 2
+	local premiumW = math.ceil(Library.MeasureText(info.premiumLabel.Text, 13, FONT_BOLD)) + 2
 	local L = Library.ComputeFooterLayout(W, nameW, premiumW, widths)
 	info.nameLabel.Size = UDim2.fromOffset(L.nameWidth, 16)
 	for i, c in ipairs(info.chips) do
@@ -1714,7 +1751,7 @@ function Library.BuildInlineButtons(frame, box, buttons, getText, flat)
 		if type(b.Icon) == "string" and b.Icon ~= "" then
 			img = new("ImageLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromOffset(26, 26), BackgroundTransparency = 1,
+				Size = UDim2.fromOffset(22, 22), BackgroundTransparency = 1,
 				Image = b.Icon, ImageTransparency = 0.25, ScaleType = Enum.ScaleType.Fit,
 				ZIndex = 9, Parent = btn,
 			})
@@ -4369,12 +4406,12 @@ function Tab:AddToggle(opts)
 		local chip = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -rightPad, 0.5, 0),
-			Size = UDim2.fromOffset(0, 20),
+			Size = UDim2.fromOffset(0, 24),
 			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
-			Font = FONT_MEDIUM,
-			TextSize = 12,
+			Font = FONT_BOLD,
+			TextSize = 16,
 			TextColor3 = THEME.Body,
 			ZIndex = 7,
 			Parent = frame,
@@ -4412,7 +4449,7 @@ function Tab:AddToggle(opts)
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = 12,
+			TextSize = chipState and 12 or 10,
 			TextColor3 = chipState and THEME.Text or THEME.ChipOff,
 			Text = opts.Chip,
 			ZIndex = 7,
@@ -4427,7 +4464,7 @@ function Tab:AddToggle(opts)
 		end
 		local chip = new("TextButton", chipProps)
 		local function chrender()
-			tween(chip, 0.2, { TextColor3 = chipState and THEME.Text or THEME.ChipOff })
+			tween(chip, 0.2, { TextColor3 = chipState and THEME.Text or THEME.ChipOff, TextSize = chipState and 12 or 10 })
 		end
 		local chipApi = {}
 		function chipApi:Set(on)
@@ -4829,14 +4866,14 @@ function Tab:AddSlider(opts)
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = 12,
+			TextSize = chipState and 12 or 10,
 			TextColor3 = chipState and THEME.Text or THEME.ChipOff,
 			Text = opts.Chip,
 			ZIndex = 7,
 			Parent = frame,
 		})
 		local function chrender()
-			tween(chip, 0.2, { TextColor3 = chipState and THEME.Text or THEME.ChipOff })
+			tween(chip, 0.2, { TextColor3 = chipState and THEME.Text or THEME.ChipOff, TextSize = chipState and 12 or 10 })
 		end
 		local chipApi = {}
 		function chipApi:Set(on)
@@ -5174,7 +5211,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 10
+Library.Version = 12
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
@@ -5609,7 +5646,7 @@ function Tab:AddRandomSlider(opts)
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Font = FONT_BOLD,
-		TextSize = 12,
+		TextSize = randomize and 12 or 10,
 		TextColor3 = randomize and THEME.Text or THEME.ChipOff,
 		Text = "RANDOM",
 		ZIndex = 7,
@@ -5626,7 +5663,7 @@ function Tab:AddRandomSlider(opts)
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = 12,
+			TextSize = st and 12 or 10,
 			TextColor3 = st and THEME.Text or THEME.ChipOff,
 			Text = opts.Chip,
 			ZIndex = 7,
@@ -5637,7 +5674,7 @@ function Tab:AddRandomSlider(opts)
 			on = on == true
 			if on == st then return end
 			st = on
-			tween(extraChip, 0.2, { TextColor3 = on and THEME.Text or THEME.ChipOff })
+			tween(extraChip, 0.2, { TextColor3 = on and THEME.Text or THEME.ChipOff, TextSize = on and 12 or 10 })
 			playSound(SOUND_CLICK, 0.22, on and 1.05 or 0.95)
 			fire(opts.ChipCallback, on)
 		end
@@ -5725,7 +5762,7 @@ function Tab:AddRandomSlider(opts)
 		on = on == true
 		if on == randomize then return end
 		randomize = on
-		tween(rngChip, 0.25, { TextColor3 = on and THEME.Text or THEME.ChipOff })
+		tween(rngChip, 0.25, { TextColor3 = on and THEME.Text or THEME.ChipOff, TextSize = on and 12 or 10 })
 
 		morphing = true
 		morphTok += 1
@@ -5839,6 +5876,7 @@ function Tab:AddRandomSlider(opts)
 	end)
 
 	rngChip.TextColor3 = randomize and THEME.Text or THEME.ChipOff
+	rngChip.TextSize = randomize and 12 or 10
 	render(true)
 	self.Window:_registerFlag(opts.Flag, api, "randomslider")
 	return api
@@ -6064,7 +6102,6 @@ function Tab:AddInput(opts)
 
 	box.Focused:Connect(function()
 		if boxStroke then tween(boxStroke, 0.2, { Transparency = 0.4 }) end
-		if not isSearch then tween(box, 0.2, { BackgroundTransparency = 0.9 }) end
 		if hasPicker then runPicker() end
 	end)
 	if hasPicker then
@@ -6074,7 +6111,6 @@ function Tab:AddInput(opts)
 	end
 	box.FocusLost:Connect(function(enter)
 		if boxStroke then tween(boxStroke, 0.2, { Transparency = isSearch and (searchOpen and 0.82 or 1) or 0.88 }) end
-		if not isSearch then tween(box, 0.2, { BackgroundTransparency = 0.94 }) end
 		task.wait(0.15)
 		if picker and not picker.Visible then else if picker then picker.Visible = false end end
 		if opts.Numeric and not tonumber(box.Text) then
