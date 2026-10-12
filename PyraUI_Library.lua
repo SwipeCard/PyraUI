@@ -50,7 +50,7 @@ local function getGuiParent()
 end
 
 local function protect(gui)
-	local fn = protectgui
+	local fn = protectguixc
 		or protect_gui
 		or (syn and syn.protect_gui)
 		or (secure_gui)
@@ -4495,7 +4495,7 @@ function Tab:AddToggle(opts)
 	if hasChip then
 		local chipState = opts.ChipDefault == true
 		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 11, FONT_BOLD)) + 4
-		local chipX = -(noSwitch and HOLD_RIGHT or (iconToggle and ICON_CHIP_RIGHT) or rightPad) - (opts.ChipOffsetX or 0)
+		local chipX = -(noSwitch and HOLD_RIGHT or (iconToggle and ICON_CHIP_RIGHT) or rightPad)
 		local chipProps = {
 			Size = UDim2.fromOffset(chipW, 20),
 			BackgroundTransparency = 1,
