@@ -81,6 +81,7 @@ local CARD_HOVER_T  = 0.93
 local FONT        = Enum.Font.GothamMedium
 local FONT_MEDIUM = Enum.Font.GothamBold
 local FONT_BOLD   = Enum.Font.GothamBold
+local TEXT_RIGHT  = 51
 
 local LOGO_ID = "rbxassetid://138576850849681"
 local DOCK_TABS_X = 52
@@ -4479,7 +4480,7 @@ function Tab:AddToggle(opts)
 	if hasChip then
 		local chipState = opts.ChipDefault == true
 		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 11, FONT_BOLD)) + 4
-		local chipX = -rightPad
+		local chipX = -((noSwitch or iconToggle) and TEXT_RIGHT or rightPad)
 		local chipProps = {
 			Size = UDim2.fromOffset(chipW, 20),
 			BackgroundTransparency = 1,
@@ -4538,6 +4539,7 @@ function Tab:AddToggle(opts)
 		if hasKey and keyChipRef and not inlineRow then
 			local function reposition()
 				local x = -rightPad - keyChipRef.AbsoluteSize.X
+				if noSwitch or iconToggle then x = math.min(chipX, x - 6) end
 				chip.Position = UDim2.new(1, x, 0.5, 0)
 				if dot then dot.Position = UDim2.new(1, x - math.max(chip.TextBounds.X, 1) - 6, 0.5, 0) end
 			end
@@ -5060,7 +5062,7 @@ function Tab:AddDropdown(opts)
 	local hasChip = type(opts.Chip) == "string"
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
-	local currentRightInset = 51
+	local currentRightInset = TEXT_RIGHT
 	if hasChip then
 		currentRightInset = 123
 		chipBtn = new("TextButton", {
@@ -5081,7 +5083,7 @@ function Tab:AddDropdown(opts)
 	end
 
 	local current = label({
-		TextSize = 12, TextColor3 = THEME.SubText,
+		Font = FONT_BOLD, TextSize = 11, TextColor3 = THEME.SubText,
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -currentRightInset, 0, 0), Size = UDim2.new(0.5, -currentRightInset, 0, HEADER),
 		TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = frame,
 	})
