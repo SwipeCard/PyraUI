@@ -1299,7 +1299,11 @@ function Library.new(config)
 
 	_G.__PYRA_ACTIVE = self
 
-	runIntro(self.Gui, function() self:Show() end)
+	if config and config.SkipIntro then
+		self.Open = false
+	else
+		runIntro(self.Gui, function() self:Show() end)
+	end
 
 	return self
 end
