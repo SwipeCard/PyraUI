@@ -852,6 +852,7 @@ function Library.new(config)
 		LayoutOrder = 0, ZIndex = 5, Parent = self.SearchList,
 	})
 
+	self.PanelH = PANEL_H
 	self.FooterY = DOCK_H + GAP + PANEL_H + GAP
 	self.Footer = new("Frame", {
 		Name = "Footer",
@@ -1199,9 +1200,64 @@ function Library.new(config)
 	return self
 end
 
+function Library:SetPanelHeight(h)
+	h = math.floor(math.clamp(tonumber(h) or PANEL_H, 200, 520) + 0.5)
+	if h == self.PanelH then return end
+	self.PanelH = h
+	self.FooterY = DOCK_H + GAP + h + GAP
+	if not self.Minimized then
+		self.Panel.Size = UDim2.new(1, 0, 0, h)
+		self.Footer.Position = UDim2.new(0, 0, 0, self.FooterY)
+		self.Holder.Size = UDim2.fromOffset(WINDOW_W, self.FooterY + (self.FooterH or FOOTER_H))
+	end
+	if self.Open then self.UIScale.Scale = self:_fitScale() end
+end
+
+function Library:FitPanelToTab(tab, extra)
+	if self._fitBusy or not tab or not tab.Container or not tab.Page then return end
+	self._fitBusy = true
+	task.spawn(function()
+		local layout = tab.Container:FindFirstChildOfClass("UIListLayout")
+		local page = tab.Page
+		local prevVisible, prevScale, prevPos = self.Holder.Visible, self.UIScale.Scale, self.Holder.Position
+		local prevPageVisible = page.Visible
+		local moved = not self.Open
+		if moved then
+			self.Holder.Position = UDim2.fromOffset(-30000, -30000)
+			self.UIScale.Scale = 1
+			self.Holder.Visible = true
+		end
+		page.Visible = true
+		local last, stable = -1, 0
+		for _ = 1, 24 do
+			RunService.RenderStepped:Wait()
+			if self.Destroyed then return end
+			if moved and self.Open then
+				self.Holder.Position = prevPos
+				moved = false
+				break
+			end
+			local h = layout and layout.AbsoluteContentSize.Y or 0
+			if h > 0 and h == last then stable = stable + 1 else stable = 0 end
+			last = h
+			if stable >= 2 then break end
+		end
+		if moved then
+			self.UIScale.Scale = prevScale
+			self.Holder.Visible = prevVisible
+			self.Holder.Position = prevPos
+		end
+		page.Visible = prevPageVisible
+		self._fitBusy = false
+		if last > 0 and stable >= 2 then
+			self:SetPanelHeight(last + 24 + (extra or 0))
+		end
+	end)
+end
+
 function Library:_fitScale()
 	local vp = camera.ViewportSize
-	local h = DOCK_H + GAP + PANEL_H + GAP + (self.FooterFullH or FOOTER_H)
+	local h = DOCK_H + GAP + (self.PanelH or PANEL_H) + GAP + (self.FooterFullH or FOOTER_H)
 	local fit = math.min((vp.X - 28) / WINDOW_W, (vp.Y - 28) / h, 1)
 	return math.max(fit, 0.45) * self.ScaleMultiplier
 end
@@ -1461,7 +1517,7 @@ function Library:SetMinimized(state)
 	else
 		if self.SearchBar then self.SearchBar.Visible = true end
 		self.Panel.Visible = true
-		tween(self.Panel, 0.4, { Size = UDim2.new(1, 0, 0, PANEL_H) })
+		tween(self.Panel, 0.4, { Size = UDim2.new(1, 0, 0, self.PanelH or PANEL_H) })
 		local fh = self:_layoutFooter(WINDOW_W)
 		tween(self.Footer, 0.4, { Position = UDim2.new(0, 0, 0, self.FooterY), Size = UDim2.new(1, 0, 0, fh) })
 		tween(self.Holder, 0.4, { Size = UDim2.fromOffset(WINDOW_W, self.FooterY + fh) }, Enum.EasingStyle.Quint)
@@ -5173,7 +5229,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 18
+Library.Version = 19
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
