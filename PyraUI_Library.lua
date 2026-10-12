@@ -1213,46 +1213,41 @@ function Library:SetPanelHeight(h)
 	if self.Open then self.UIScale.Scale = self:_fitScale() end
 end
 
+local stackHeight, guiHeight
+function guiHeight(inst)
+	local a = inst.AutomaticSize
+	if a == Enum.AutomaticSize.Y or a == Enum.AutomaticSize.XY then
+		return math.max(stackHeight(inst), inst.Size.Y.Offset)
+	end
+	return inst.Size.Y.Offset
+end
+function stackHeight(inst)
+	local layout = inst:FindFirstChildOfClass("UIListLayout")
+	local gap = layout and layout.Padding.Offset or 0
+	local sum, n = 0, 0
+	for _, c in ipairs(inst:GetChildren()) do
+		if c:IsA("GuiObject") and c.Visible then
+			sum = sum + guiHeight(c)
+			n = n + 1
+		end
+	end
+	sum = sum + gap * math.max(n - 1, 0)
+	local up = inst:FindFirstChildOfClass("UIPadding")
+	if up then sum = sum + up.PaddingTop.Offset + up.PaddingBottom.Offset end
+	return sum
+end
+
 function Library:FitPanelToTab(tab, extra)
-	if self._fitBusy or not tab or not tab.Container or not tab.Page then return end
-	self._fitBusy = true
-	task.spawn(function()
-		local layout = tab.Container:FindFirstChildOfClass("UIListLayout")
-		local page = tab.Page
-		local prevVisible, prevScale, prevPos = self.Holder.Visible, self.UIScale.Scale, self.Holder.Position
-		local prevPageVisible = page.Visible
-		local moved = not self.Open
-		if moved then
-			self.Holder.Position = UDim2.fromOffset(-30000, -30000)
-			self.UIScale.Scale = 1
-			self.Holder.Visible = true
+	if type(tab) == "string" then
+		local want = tab
+		tab = nil
+		for _, t in ipairs(self.Tabs) do
+			if t.Name == want then tab = t break end
 		end
-		page.Visible = true
-		local last, stable = -1, 0
-		for _ = 1, 24 do
-			RunService.RenderStepped:Wait()
-			if self.Destroyed then return end
-			if moved and self.Open then
-				self.Holder.Position = prevPos
-				moved = false
-				break
-			end
-			local h = layout and layout.AbsoluteContentSize.Y or 0
-			if h > 0 and h == last then stable = stable + 1 else stable = 0 end
-			last = h
-			if stable >= 2 then break end
-		end
-		if moved then
-			self.UIScale.Scale = prevScale
-			self.Holder.Visible = prevVisible
-			self.Holder.Position = prevPos
-		end
-		page.Visible = prevPageVisible
-		self._fitBusy = false
-		if last > 0 and stable >= 2 then
-			self:SetPanelHeight(last + 24 + (extra or 0))
-		end
-	end)
+	end
+	if not tab or not tab.Container then return end
+	local h = stackHeight(tab.Container)
+	if h > 0 then self:SetPanelHeight(h + (extra or 0)) end
 end
 
 function Library:_fitScale()
@@ -3480,7 +3475,7 @@ function Library:AddTab(name, tabOpts)
 		ZIndex = 3,
 		Parent = page,
 	}, {
-		pad(12, 14, 12, 14),
+		pad(8, 14, 8, 14),
 		new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 	tab.Page, tab.Container = page, scroll
@@ -5039,9 +5034,9 @@ function Tab:AddDropdown(opts)
 	local hasChip = type(opts.Chip) == "string"
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
-	local currentRightInset = 42
+	local currentRightInset = 46
 	if hasChip then
-		currentRightInset = 126
+		currentRightInset = 130
 		chipBtn = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -34, 0.5, 0),
 			Size = UDim2.fromOffset(78, 20), BackgroundColor3 = THEME.Switch,
@@ -5085,7 +5080,7 @@ function Tab:AddDropdown(opts)
 	local arrow
 	if arrowUseIcon then
 		arrow = new("ImageLabel", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0, HEADER / 2),
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0, HEADER / 2),
 			Size = UDim2.fromOffset(24, 16), BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Arrow, ImageColor3 = THEME.Body, ZIndex = 4, Parent = frame,
@@ -5093,7 +5088,7 @@ function Tab:AddDropdown(opts)
 	else
 		arrow = label({
 			Text = "▾", TextSize = 12, TextColor3 = THEME.SubText,
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -20, 0, HEADER / 2),
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0, HEADER / 2),
 			Size = UDim2.fromOffset(14, 14), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 4, Parent = frame,
 		})
 	end
@@ -5229,7 +5224,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 19
+Library.Version = 20
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
