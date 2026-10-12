@@ -658,7 +658,7 @@ function Library.new(config)
 		ZIndex = 1,
 		Parent = self.Holder,
 	})
-	glassify(self.Dock, GLASS_DOCK_T, 12)
+	glassify(self.Dock, GLASS_DOCK_T, 10)
 
 	self.Panel = new("Frame", {
 		Name = "Panel",
@@ -669,7 +669,7 @@ function Library.new(config)
 		ZIndex = 1,
 		Parent = self.Holder,
 	})
-	glassify(self.Panel, GLASS_PANEL_T, 14)
+	glassify(self.Panel, GLASS_PANEL_T, 12)
 
 	local logo = new("ImageLabel", {
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -898,7 +898,7 @@ function Library.new(config)
 		BorderSizePixel = 0,
 		ZIndex = 50,
 		Parent = self.Content,
-	}, { corner(12) })
+	}, { corner(10) })
 
 	self.SearchPage = new("CanvasGroup", {
 		Name = "SearchPage",
@@ -940,7 +940,7 @@ function Library.new(config)
 		ZIndex = 1,
 		Parent = self.Holder,
 	})
-	glassify(self.Footer, GLASS_DOCK_T, 12)
+	glassify(self.Footer, GLASS_DOCK_T, 10)
 
 	local avatar = new("ImageLabel", {
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -1764,6 +1764,45 @@ function Library.BuildInlineButtons(frame, box, buttons, getText, flat)
 end
 
 function Library.InstallPanelWidgets(panel, body, nextOrder)
+	local joinCard, joinCount = nil, 0
+	local function widgetHost()
+		if not joinCard then return body, false end
+		joinCount = joinCount + 1
+		if joinCount > 1 then
+			new("Frame", {
+				Size = UDim2.new(1, 0, 0, 1),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BackgroundTransparency = 0.9,
+				BorderSizePixel = 0,
+				LayoutOrder = nextOrder(),
+				ZIndex = 5,
+				Parent = joinCard,
+			})
+		end
+		return joinCard, true
+	end
+	function panel:BeginJoin()
+		joinCard = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
+			BackgroundTransparency = 0.2,
+			BorderSizePixel = 0,
+			ClipsDescendants = true,
+			LayoutOrder = nextOrder(),
+			ZIndex = 4,
+			Parent = body,
+		}, {
+			corner(8), stroke(Color3.new(1, 1, 1), 0.9),
+			new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 0) }),
+		})
+		joinCount = 0
+	end
+	function panel:EndJoin()
+		joinCard = nil
+		joinCount = 0
+	end
+
 	function panel:AddTextArea(o)
 		o = o or {}
 		local areaH = o.Height or 180
@@ -1811,15 +1850,16 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 	function panel:AddInput(o)
 		o = o or {}
 		local btnCount = type(o.Buttons) == "table" and #o.Buttons or 0
+		local host, joined = widgetHost()
 		local wrap = new("Frame", {
 			Size = UDim2.new(1, 0, 0, btnCount > 0 and 40 or 34),
 			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
-			BackgroundTransparency = 0.2,
+			BackgroundTransparency = joined and 1 or 0.2,
 			BorderSizePixel = 0,
 			LayoutOrder = nextOrder(),
 			ZIndex = 4,
-			Parent = body,
-		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9) })
+			Parent = host,
+		}, joined and {} or { corner(8), stroke(Color3.new(1, 1, 1), 0.9) })
 		if o.Name then
 			label({
 				Text = o.Name, Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
@@ -1857,16 +1897,17 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		local options = o.Options or {}
 		local selected = o.Default or options[1]
 		local HEAD, ROW, MAXROWS = 34, 26, 5
+		local host, joined = widgetHost()
 		local wrap = new("Frame", {
 			Size = UDim2.new(1, 0, 0, HEAD),
 			BackgroundColor3 = Color3.fromRGB(8, 8, 11),
-			BackgroundTransparency = 0.2,
+			BackgroundTransparency = joined and 1 or 0.2,
 			BorderSizePixel = 0,
 			ClipsDescendants = true,
 			LayoutOrder = nextOrder(),
 			ZIndex = 4,
-			Parent = body,
-		}, { corner(8), stroke(Color3.new(1, 1, 1), 0.9) })
+			Parent = host,
+		}, joined and {} or { corner(8), stroke(Color3.new(1, 1, 1), 0.9) })
 		if o.Name then
 			label({
 				Text = o.Name, Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
@@ -2072,20 +2113,20 @@ function Library:CreateSidePanel(opts)
 		Visible = false,
 		ZIndex = 80,
 		Parent = self.Gui,
-	}, { corner(12), stroke(Color3.new(1, 1, 1), 0.88) })
+	}, { corner(10), stroke(Color3.new(1, 1, 1), 0.88) })
 	if not self.IsMobile then
 		local a = createAcrylic(root)
 		table.insert(self.Acrylic, a)
 	end
 	if not self.AcrylicEnabled then root.BackgroundTransparency = SOLID_T end
-	self:_trackScale(root)
+	local panelScale = self:_trackScale(root)
 
 	new("ImageLabel", {
 		Name = "Noise", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
 		Image = "rbxassetid://9968344227", ImageTransparency = 0.94,
 		ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(128, 128),
 		ZIndex = 2, Parent = root,
-	}, { corner(12) })
+	}, { corner(10) })
 
 	local header = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 40),
@@ -2582,7 +2623,7 @@ function Library:CreateSidePanel(opts)
 		Visible = false,
 		ZIndex = 78,
 		Parent = self.Gui,
-	}, { corner(12), stroke(Color3.new(1, 1, 1), 1) })
+	}, { corner(10), stroke(Color3.new(1, 1, 1), 1) })
 	local ghostStroke = ghost:FindFirstChildOfClass("UIStroke")
 
 	local function setSnapHint(on)
@@ -2648,19 +2689,23 @@ function Library:CreateSidePanel(opts)
 
 	function panel:_uiHidden()
 		if pinned then panel._wasVisible = false return end
-		panel._wasVisible = root.Visible
-		if not root.Visible then return end
-		fadeTo(1)
+		panel._wasVisible = root.Visible and shown
+		if not panel._wasVisible then return end
+		fadeTok += 1
 		local myTok = fadeTok
+		tween(panelScale, 0.3, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 		task.delay(0.3, function()
 			if myTok == fadeTok then root.Visible = false end
 		end)
 	end
 	function panel:_uiShown()
 		if not panel._wasVisible then return end
+		fadeTok += 1
 		root.Visible = true
+		root.GroupTransparency = 0
+		panelScale.Scale = 0
 		if not detached then target = dockTopLeft() end
-		fadeTo(0)
+		tween(panelScale, 0.55, { Scale = win:_fitScale() }, Enum.EasingStyle.Back)
 	end
 
 	panel.Root = root
@@ -5164,7 +5209,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 5
+Library.Version = 6
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
