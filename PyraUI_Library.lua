@@ -82,6 +82,7 @@ local FONT_MEDIUM = Enum.Font.GothamBold
 local FONT_BOLD   = Enum.Font.GothamBold
 
 local LOGO_ID = "rbxassetid://138576850849681"
+local DOCK_TABS_X = 52
 
 local ICONS = {
 	Logo = "rbxassetid://138576850849681",
@@ -681,26 +682,11 @@ function Library.new(config)
 		ZIndex = 3,
 		Parent = self.Dock,
 	})
-	TweenService:Create(
-		logo,
-		TweenInfo.new(2.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-		{ Rotation = 8 }
-	):Play()
-	label({
-		Text = config.Title or "PYRA",
-		Font = FONT_BOLD,
-		TextSize = 14,
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 42, 0.5, 0),
-		Size = UDim2.fromOffset(60, 20),
-		ZIndex = 3,
-		Parent = self.Dock,
-	})
 
 	self.TabBar = new("Frame", {
 		Name = "TabBar",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 108, 0.5, 0),
+		Position = UDim2.new(0, DOCK_TABS_X, 0.5, 0),
 		Size = UDim2.fromOffset(0, TAB_H),
 		BackgroundTransparency = 1,
 		ZIndex = 3,
@@ -1555,7 +1541,7 @@ function Library:SetMinimized(state)
 		end
 	end
 
-	local dockUsed = 108 + (self.TabBarWidth or 0) + 48 + 88
+	local dockUsed = DOCK_TABS_X + (self.TabBarWidth or 0) + 48 + 88
 	local miniW = math.clamp(dockUsed, 320, WINDOW_W)
 
 	if state then
@@ -3441,7 +3427,7 @@ function Library:AddTabIcon(iconId, onClick, size)
 	local holder = new("TextButton", {
 		Name = "TabIcon",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 108 + (self.TabBarWidth or 0) + 6, 0.5, 0),
+		Position = UDim2.new(0, DOCK_TABS_X + (self.TabBarWidth or 0) + 6, 0.5, 0),
 		Size = UDim2.fromOffset(size + 8, size + 8),
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
