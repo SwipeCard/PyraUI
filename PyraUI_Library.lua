@@ -122,7 +122,7 @@ task.spawn(function()
 	for _, a in ipairs(assets) do a:Destroy() end
 end)
 
-local WINDOW_W = 570
+local WINDOW_W = 550
 local DOCK_H   = 44
 local GAP      = 8
 local PANEL_H  = 380
@@ -1088,8 +1088,6 @@ function Library.new(config)
 	local statusHex = self.StatusColor:ToHex()
 	self.StatusValue = chip(config.StatusLabel or "STATUS", string.format('<font color="#%s">●</font> %s', statusHex, self.StatusText))
 	self.ExpiryValue = chip("EXPIRES", config.Expiry or "12/21/2036")
-	local pingValue = chip("PING", "-- ms")
-	local fpsValue = chip("FPS", "--")
 	local sessionValue = chip("SESSION", "00:00:00")
 
 	self.FooterH = FOOTER_H
@@ -1098,22 +1096,12 @@ function Library.new(config)
 	self:_refreshFooter()
 
 	local sessionStart = os.clock()
-	local frameCount, frameT0 = 0, os.clock()
-	table.insert(self.Connections, RunService.RenderStepped:Connect(function()
-		frameCount += 1
-	end))
 	task.spawn(function()
 		while not self.Destroyed do
 			local now = os.clock()
 			if not self.Open then
-				frameCount, frameT0 = 0, now
 				task.wait(0.75)
 			else
-				fpsValue.Text = tostring(math.floor(frameCount / math.max(now - frameT0, 1e-3) + 0.5))
-				frameCount, frameT0 = 0, now
-				local ok, ping = pcall(function() return player:GetNetworkPing() end)
-				pingValue.Text = ok and (math.floor(ping * 1000 + 0.5) .. " ms") or "-- ms"
-
 				local e
 				if self.SessionStart then
 					e = math.max(0, math.floor(os.time() - self.SessionStart))
@@ -1963,6 +1951,38 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		})
 		local listFrame
 		local api = {}
+		if type(o.Chip) == "string" and o.Name then
+			local chipOn = o.ChipDefault == true
+			local chipBtn = new("TextButton", {
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, 10 + math.ceil(Library.MeasureText(o.Name, 10, FONT_BOLD)) + 8, 0, HEAD / 2),
+				Size = UDim2.fromOffset(44, 20),
+				BackgroundTransparency = 1,
+				AutoButtonColor = false,
+				Font = FONT_BOLD,
+				TextSize = chipOn and 12 or 10,
+				TextColor3 = chipOn and THEME.Text or THEME.ChipOff,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Text = o.Chip,
+				ZIndex = 7,
+				Parent = wrap,
+			})
+			local chipApi = {}
+			function chipApi:Set(on, silent)
+				on = on == true
+				if on == chipOn then return end
+				chipOn = on
+				tween(chipBtn, 0.2, { TextColor3 = on and THEME.Text or THEME.ChipOff, TextSize = on and 12 or 10 })
+				if not silent then
+					playSound(SOUND_CLICK, 0.22, on and 1.05 or 0.95)
+					fire(o.ChipCallback, on)
+				end
+			end
+			function chipApi:Get() return chipOn end
+			function chipApi:SetVisible(v) chipBtn.Visible = v ~= false end
+			chipBtn.Activated:Connect(function() chipApi:Set(not chipOn) end)
+			api.Chip = chipApi
+		end
 		local function closeList()
 			if listFrame then listFrame:Destroy(); listFrame = nil end
 			wrap.Size = UDim2.new(1, 0, 0, HEAD)
@@ -3195,6 +3215,25 @@ function Library:_registerFlag(flag, api, kind)
 	if type(flag) ~= "string" or flag == "" or not api then return end
 	if not self.Flags[flag] then table.insert(self._flagOrder, flag) end
 	self.Flags[flag] = { api = api, kind = kind }
+	if type(api.Set) == "function" and not rawget(api, "_flagWrapped") then
+		local rawSet = api.Set
+		api._flagWrapped = true
+		api.Set = function(...)
+			local r1, r2 = rawSet(...)
+			self:_notifyChanged(flag)
+			return r1, r2
+		end
+	end
+end
+function Library:OnConfigChanged(fn)
+	if type(fn) ~= "function" then return end
+	self._changeListeners = self._changeListeners or {}
+	table.insert(self._changeListeners, fn)
+end
+function Library:_notifyChanged(flag)
+	local list = self._changeListeners
+	if not list then return end
+	for _, fn in ipairs(list) do fire(fn, flag) end
 end
 
 local function _flagSerialize(entry)
@@ -3449,10 +3488,10 @@ function Library:AddTab(name, tabOpts)
 	}, Tab)
 
 	local textWidth = Library.MeasureText(name, 13, FONT_MEDIUM)
-	local width = math.max(52, math.ceil(textWidth) + 28)
+	local width = math.max(44, math.ceil(textWidth) + 20)
 	local x = self.TabBarWidth
-	self.TabBarWidth = x + width + 4
-	self.TabBar.Size = UDim2.fromOffset(self.TabBarWidth - 4, TAB_H)
+	self.TabBarWidth = x + width + 2
+	self.TabBar.Size = UDim2.fromOffset(self.TabBarWidth - 2, TAB_H)
 	self:_layoutTabIcons()
 
 	local button = new("TextButton", {
@@ -4113,12 +4152,11 @@ function Tab:AddToggle(opts)
 	if chipInline then inset = hasKey and 110 or 70 end
 	local noSwitch = opts.NoSwitch == true
 	local circle = opts.Circle == true and not noSwitch
-	local rightPad = noSwitch and 12 or 60
+	local rightPad = noSwitch and 4 or 60
 	if noSwitch then inset = math.max(inset - 48, 50) end
 	local inlineRow
 	local iconToggle = opts.IconToggle == true and type(opts.Icon) == "string" and opts.Icon ~= ""
-	if iconToggle and not noSwitch then rightPad = 46 end
-	if circle then rightPad = 44 end
+	if circle then rightPad = 52 end
 	if sliderOpts then
 		label({
 			Text = opts.Name or "Toggle", Font = FONT_MEDIUM, TextSize = 13,
@@ -4184,24 +4222,41 @@ function Tab:AddToggle(opts)
 
 	local bigIcon
 	local switch, knob
-	local circleFrame, circleStroke
+	local circleFill, circleStroke
 	local checkbox, checkMark
 	local isCheckbox = opts.Checkbox == true and not iconToggle and not sliderOpts and not circle
 	if noSwitch then
 		iconToggle = false
 		isCheckbox = false
 	elseif circle then
-		circleFrame = new("Frame", {
+		local circleHolder = new("Frame", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = sliderOpts and UDim2.new(1, -14, 0, 18) or UDim2.new(1, -14, 0.5, 0),
-			Size = UDim2.fromOffset(20, 20),
+			Position = sliderOpts and UDim2.new(1, -22, 0, 18) or UDim2.new(1, -22, 0.5, 0),
+			Size = UDim2.fromOffset(24, 24),
+			BackgroundTransparency = 1,
+			ZIndex = 4,
+			Parent = frame,
+		})
+		circleFill = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(22, 22),
 			BackgroundColor3 = self.Accent,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			ZIndex = 4,
-			Parent = frame,
+			Parent = circleHolder,
+		}, { round() })
+		local ring = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(20, 20),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ZIndex = 5,
+			Parent = circleHolder,
 		}, { round(), stroke(THEME.SubText, 0, 2) })
-		circleStroke = circleFrame:FindFirstChildOfClass("UIStroke")
+		circleStroke = ring:FindFirstChildOfClass("UIStroke")
 	elseif iconToggle then
 
 		bigIcon = new("ImageLabel", {
@@ -4273,7 +4328,7 @@ function Tab:AddToggle(opts)
 		local t = instant and 0 or 0.28
 		local info = TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 		if circle then
-			TweenService:Create(circleFrame, info, { BackgroundTransparency = state and 0 or 1 }):Play()
+			TweenService:Create(circleFill, info, { BackgroundTransparency = state and 0 or 1 }):Play()
 			TweenService:Create(circleStroke, info, { Color = state and self.Accent or THEME.SubText }):Play()
 		elseif iconToggle then
 			if bigIcon then
@@ -5236,7 +5291,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 13
+Library.Version = 14
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
