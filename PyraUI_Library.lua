@@ -2945,10 +2945,25 @@ function Library:SetFPSCap(n)
 	if okSettings then return true, "settings" end
 
 	if type(setfflag) == "function" then
-		local capped = math.min(math.floor(n), 10000)
-		if pcall(setfflag, "DFIntTaskSchedulerTargetFps", tostring(capped)) then
-			return true, "fflag"
+		local capped = tostring(math.min(math.floor(n), 10000))
+		-- Executor flag APIs generally want the bare name, so try that first
+		-- and only fall back to the prefixed form. Where getfflag exists, skip
+		-- any form it doesn't recognise rather than silently setting nothing.
+		local forms = { "TaskSchedulerTargetFps", "DFIntTaskSchedulerTargetFps" }
+		local canVerify = type(getfflag) == "function"
+		local applied = false
+		for _, flagName in ipairs(forms) do
+			local known = true
+			if canVerify then
+				local okGet, cur = pcall(getfflag, flagName)
+				known = okGet and cur ~= nil
+			end
+			if known and pcall(setfflag, flagName, capped) then
+				applied = true
+				if canVerify then break end -- verified form worked; unverified, set both
+			end
 		end
+		if applied then return true, "fflag" end
 	end
 	return false
 end
