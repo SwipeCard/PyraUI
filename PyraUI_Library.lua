@@ -81,7 +81,7 @@ local CARD_HOVER_T  = 0.93
 local FONT        = Enum.Font.GothamMedium
 local FONT_MEDIUM = Enum.Font.GothamBold
 local FONT_BOLD   = Enum.Font.GothamBold
-local TEXT_RIGHT  = 51
+local TEXT_RIGHT  = 45
 
 local LOGO_ID = "rbxassetid://138576850849681"
 local DOCK_TABS_X = 52
@@ -6151,6 +6151,7 @@ function Tab:AddInput(opts)
 	end
 
 	box.Focused:Connect(function()
+		if opts.ClearOnFocus then box.Text = "" end
 		if boxStroke then tween(boxStroke, 0.2, { Transparency = 0.4 }) end
 		if hasPicker then runPicker() end
 	end)
@@ -6238,7 +6239,7 @@ function Tab:AddPlayerSearch(opts)
 
 	local searchBtn = new("TextButton", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(1, -26, 0.5, 0),
+		Position = UDim2.new(1, -26, 0, HEADER / 2),
 		Size = UDim2.fromOffset(38, 38),
 		BackgroundColor3 = THEME.Card,
 		BackgroundTransparency = 1,
