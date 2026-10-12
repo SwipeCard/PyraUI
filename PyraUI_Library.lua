@@ -1643,8 +1643,7 @@ function Library:_refreshMonitorSeparators()
 		if wanted[sep] then
 			if not sep.Visible then
 				sep.Visible = true
-				sep.BackgroundTransparency = 1
-				tween(sep, 0.22, { BackgroundTransparency = 0.86 })
+				sep.BackgroundTransparency = 0.86
 			end
 		elseif sep.Visible then
 			sep.Visible = false
@@ -1656,8 +1655,7 @@ function Library:_refreshMonitorSeparators()
 	local bar = self.MonitorBar
 	if any and not bar.Visible then
 		bar.Visible = true
-		bar.Position = self.MonitorHome + UDim2.fromOffset(0, -10)
-		tween(bar, 0.3, { Position = self.MonitorHome }, Enum.EasingStyle.Back)
+		bar.Position = self.MonitorHome
 	elseif not any and bar.Visible then
 		bar.Visible = false
 		bar.Position = self.MonitorHome
@@ -2414,15 +2412,33 @@ function Library:CreateSidePanel(opts)
 	local function setAbs(v) moveAbs(root, v) end
 
 	panel._priority = opts.DockPriority or W
+	panel._defaultRank = -panel._priority
+	panel._rank = panel._defaultRank
 	local DOCK_GAP = 16
+
+	local function rankOf(p) return p._rank or -(p._priority or 0) end
+	local function sortedDocked(exclude)
+		local list = {}
+		for _, q in ipairs(win.SidePanels or {}) do
+			if q ~= exclude and q._dockEligible and q._dockEligible() then list[#list + 1] = q end
+		end
+		table.sort(list, function(x, y)
+			local rx, ry = rankOf(x), rankOf(y)
+			if rx ~= ry then return rx < ry end
+			return (x._order or 0) < (y._order or 0)
+		end)
+		return list
+	end
 
 	local function dockOffsetX()
 		local x = 0
+		local rp, op = rankOf(panel), panel._order or math.huge
 		for _, q in ipairs(win.SidePanels or {}) do
 			if q ~= panel and q._dockEligible and q._dockEligible() then
-				local ahead = q._priority > panel._priority
-					or (q._priority == panel._priority and (q._order or 0) < (panel._order or math.huge))
-				if ahead then x = x + q.Root.AbsoluteSize.X + DOCK_GAP end
+				local rq = rankOf(q)
+				if rq < rp or (rq == rp and (q._order or 0) < op) then
+					x = x + q.Root.AbsoluteSize.X + DOCK_GAP
+				end
 			end
 		end
 		return x
@@ -2435,15 +2451,23 @@ function Library:CreateSidePanel(opts)
 		return false
 	end
 
-	local lastDock = nil
-	local function dockTopLeft()
+	local function mainVisible()
+		local hs = win.Holder.AbsoluteSize
+		return win.Open and hs.X >= 8 and hs.Y >= 8
+	end
+
+	local function dockOrigin()
 		local h = win.Holder
 		local hp, hs = h.AbsolutePosition, h.AbsoluteSize
-		if hs.X < 8 or hs.Y < 8 then
-			return lastDock or Vector2.new(hp.X + 16, hp.Y)
+		if mainVisible() then
+			win._dockOrigin = Vector2.new(hp.X + hs.X + DOCK_GAP, hp.Y + hs.Y / 2)
 		end
-		lastDock = Vector2.new(hp.X + hs.X + DOCK_GAP + dockOffsetX(), hp.Y + hs.Y / 2 - root.AbsoluteSize.Y / 2)
-		return lastDock
+		return win._dockOrigin or Vector2.new(hp.X + DOCK_GAP, hp.Y + 200)
+	end
+
+	local function dockTopLeft()
+		local o = dockOrigin()
+		return Vector2.new(o.X + dockOffsetX(), o.Y - root.AbsoluteSize.Y / 2)
 	end
 
 	local function hideTopLeft()
@@ -2528,13 +2552,17 @@ function Library:CreateSidePanel(opts)
 	end
 
 	function panel:IsDetached() return detached end
+	panel._reattach = reattach
+	panel._isFloating = function() return detached and root.Visible and not dragging end
 	function panel:IsShown() return shown end
 	function panel:Close()
-		if shown or detached then
-			detached = false
-			shown = true
-			panel:Hide()
-		end
+		if not (shown or detached) then return end
+		detached = false
+		shown = false
+		fadeTok += 1
+		panel._rank = panel._defaultRank
+		root.GroupTransparency = 1
+		root.Visible = false
 	end
 	function panel:Toggle()
 		if shown or detached then
@@ -2605,8 +2633,11 @@ function Library:CreateSidePanel(opts)
 	}, { corner(10), stroke(Color3.new(1, 1, 1), 1) })
 	local ghostStroke = ghost:FindFirstChildOfClass("UIStroke")
 
-	local function setSnapHint(on)
-		if on == snapLit then return end
+	local function setSnapHint(on, slot)
+		if on == snapLit then
+			if on and slot then moveAbs(ghost, slot) end
+			return
+		end
 		snapLit = on
 		local c = snapColor()
 		if rootStroke then
@@ -2618,7 +2649,7 @@ function Library:CreateSidePanel(opts)
 		if on then
 			ghost.Size = UDim2.fromOffset(math.max(60, root.AbsoluteSize.X), math.max(60, root.AbsoluteSize.Y))
 			ghost.Visible = true
-			moveAbs(ghost, dockTopLeft())
+			moveAbs(ghost, slot or dockTopLeft())
 			ghost.BackgroundColor3 = c
 			ghostStroke.Color = c
 			tween(ghost, 0.15, { BackgroundTransparency = 0.9 })
@@ -2628,6 +2659,69 @@ function Library:CreateSidePanel(opts)
 			tween(ghostStroke, 0.15, { Transparency = 1 })
 			task.delay(0.16, function() if not snapLit then ghost.Visible = false end end)
 		end
+	end
+
+	local function provisionalRank()
+		local list = sortedDocked(panel)
+		if #list == 0 then return panel._defaultRank end
+		local o = dockOrigin()
+		local x = o.X
+		local cx = root.AbsolutePosition.X + root.AbsoluteSize.X / 2
+		local idx = 0
+		for i, q in ipairs(list) do
+			local w = q.Root.AbsoluteSize.X
+			if cx > x + w / 2 then idx = i end
+			x = x + w + DOCK_GAP
+		end
+		if idx == 0 then return rankOf(list[1]) - 1 end
+		if idx == #list then return rankOf(list[#list]) + 1 end
+		return (rankOf(list[idx]) + rankOf(list[idx + 1])) / 2
+	end
+
+	local function bestSnap()
+		local pos = root.AbsolutePosition
+		local kind, slot, info
+		local chainSlot = dockTopLeft()
+		local bestDist = (pos - chainSlot).Magnitude
+		if bestDist < DOCK_SNAP_RADIUS then
+			kind, slot = "chain", chainSlot
+		else
+			bestDist = math.huge
+		end
+		if not mainVisible() and #sortedDocked(panel) == 0 then
+			local sz = root.AbsoluteSize
+			for _, q in ipairs(win.SidePanels or {}) do
+				if q ~= panel and q._isFloating and q._isFloating() then
+					local qp, qs = q.Root.AbsolutePosition, q.Root.AbsoluteSize
+					local y = qp.Y + qs.Y / 2 - sz.Y / 2
+					local right = Vector2.new(qp.X + qs.X + DOCK_GAP, y)
+					local left = Vector2.new(qp.X - DOCK_GAP - sz.X, y)
+					local dr, dl = (pos - right).Magnitude, (pos - left).Magnitude
+					if dr < DOCK_SNAP_RADIUS and dr < bestDist then
+						kind, slot, bestDist, info = "free", right, dr, { other = q, side = 1 }
+					end
+					if dl < DOCK_SNAP_RADIUS and dl < bestDist then
+						kind, slot, bestDist, info = "free", left, dl, { other = q, side = -1 }
+					end
+				end
+			end
+		end
+		return kind, slot, info
+	end
+
+	local function joinFree(other, side)
+		local sz = root.AbsoluteSize
+		local op, osz = other.Root.AbsolutePosition, other.Root.AbsoluteSize
+		local cy = op.Y + osz.Y / 2
+		if side == 1 then
+			win._dockOrigin = Vector2.new(op.X, cy)
+			other._rank, panel._rank = 0, 1
+		else
+			win._dockOrigin = Vector2.new(op.X - DOCK_GAP - sz.X, cy)
+			panel._rank, other._rank = 0, 1
+		end
+		if other._reattach then other._reattach() end
+		reattach()
 	end
 
 	dragHandle.InputBegan:Connect(function(input)
@@ -2641,13 +2735,19 @@ function Library:CreateSidePanel(opts)
 			if input.UserInputState ~= Enum.UserInputState.End then return end
 			conn:Disconnect()
 			dragging = false
+			if not detached then
+				setSnapHint(false)
+				return
+			end
+			local kind, _, info = bestSnap()
 			setSnapHint(false)
-			if not detached then return end
-			local tl = root.AbsolutePosition
-			if (tl - dockTopLeft()).Magnitude < DOCK_SNAP_RADIUS then
+			if kind == "chain" then
 				reattach()
+			elseif kind == "free" then
+				joinFree(info.other, info.side)
 			else
-				target = tl
+				panel._rank = panel._defaultRank
+				target = root.AbsolutePosition
 			end
 		end)
 	end)
@@ -2663,7 +2763,9 @@ function Library:CreateSidePanel(opts)
 			return
 		end
 		followCursor(mouse)
-		setSnapHint((root.AbsolutePosition - dockTopLeft()).Magnitude < DOCK_SNAP_RADIUS)
+		panel._rank = provisionalRank()
+		local kind, slot = bestSnap()
+		setSnapHint(kind ~= nil, slot)
 	end))
 
 	function panel:_uiHidden()
@@ -2720,13 +2822,11 @@ function Library:AddMonitor(key, label_)
 	local content = cell
 	local capLabel = label({
 		Text = (label_ or key):upper(), Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
-		TextTransparency = 1,
 		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
 		Size = UDim2.new(0.5, 0, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, Parent = cell,
 	})
 	local valueLabel = label({
 		Text = "--", Font = FONT_MEDIUM, TextSize = 12, TextColor3 = THEME.Text, RichText = true,
-		TextTransparency = 1,
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
 		Size = UDim2.new(0.5, 0, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, Parent = cell,
 	})
@@ -2736,8 +2836,6 @@ function Library:AddMonitor(key, label_)
 	})
 
 	local win = self
-	local FADE = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	local fadeToken = 0
 	local item = { cell = cell, sep = sep, value = valueLabel, caption = capLabel, shown = false, clickFns = {} }
 	function item:Set(v) valueLabel.Text = tostring(v) end
 	function item:SetColor(c)
@@ -2754,25 +2852,8 @@ function Library:AddMonitor(key, label_)
 		on = on ~= false
 		if on == self.shown then return end
 		self.shown = on
-		fadeToken += 1
-		local myToken = fadeToken
-		if on then
-			cell.Visible = true
-			TweenService:Create(capLabel, FADE, { TextTransparency = 0 }):Play()
-			TweenService:Create(valueLabel, FADE, { TextTransparency = 0 }):Play()
-			win:_refreshMonitorSeparators()
-		else
-			TweenService:Create(capLabel, FADE, { TextTransparency = 1 }):Play()
-			TweenService:Create(valueLabel, FADE, { TextTransparency = 1 }):Play()
-			if sep.Visible then tween(sep, 0.12, { BackgroundTransparency = 1 }) end
-			task.delay(0.12, function()
-				if myToken == fadeToken and not self.shown then
-					cell.Visible = false
-					sep.BackgroundTransparency = 0.86
-					win:_refreshMonitorSeparators()
-				end
-			end)
-		end
+		cell.Visible = on
+		win:_refreshMonitorSeparators()
 	end
 	table.insert(self.MonitorOrder, item)
 	self.MonitorItems[key] = item
@@ -3619,13 +3700,7 @@ local function elementFrame(tab, height)
 	return f
 end
 
-local function hoverable(frame, target)
-	local rest = frame:GetAttribute("RestT")
-	if rest == nil then rest = CARD_T end
-	local hover = rest >= 1 and 0.965 or CARD_HOVER_T
-	target.MouseEnter:Connect(function() tween(frame, 0.2, { BackgroundTransparency = hover }) end)
-	target.MouseLeave:Connect(function() tween(frame, 0.2, { BackgroundTransparency = rest }) end)
-end
+local function hoverable(frame, target) end
 
 function Tab:AddGroup(opts)
 	opts = opts or {}
@@ -4156,6 +4231,7 @@ function Tab:AddToggle(opts)
 	self.Window:_index(self, frame, opts.Name or "Toggle", opts.Description)
 
 	local bigIcon
+	local ctl
 	local switch, knob
 	local circleFill, circleStroke
 	local checkbox, checkMark
@@ -4172,6 +4248,7 @@ function Tab:AddToggle(opts)
 			ZIndex = 4,
 			Parent = frame,
 		})
+		ctl = circleHolder
 		circleFill = new("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
@@ -4205,6 +4282,7 @@ function Tab:AddToggle(opts)
 			ZIndex = 4,
 			Parent = frame,
 		})
+		ctl = bigIcon
 	elseif isCheckbox then
 		checkbox = new("Frame", {
 			AnchorPoint = Vector2.new(1, 0.5),
@@ -4215,6 +4293,7 @@ function Tab:AddToggle(opts)
 			ZIndex = 4,
 			Parent = frame,
 		}, { corner(6), stroke(Color3.new(1, 1, 1), 0.86) })
+		ctl = checkbox
 		local useCheckIcon = type(ICONS.Check) == "string" and ICONS.Check ~= ""
 		if useCheckIcon then
 			checkMark = new("ImageLabel", {
@@ -4250,10 +4329,18 @@ function Tab:AddToggle(opts)
 			Parent = switch,
 		}, { round() })
 	end
-	local hit = new("TextButton", {
-		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = frame,
-	})
-	hoverable(frame, hit)
+	local hit
+	do
+		local control = ctl or switch
+		if control then
+			local cs = control.Size
+			hit = new("TextButton", {
+				AnchorPoint = control.AnchorPoint, Position = control.Position,
+				Size = UDim2.fromOffset(cs.X.Offset + 10, math.max(cs.Y.Offset + 10, 30)),
+				BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = frame,
+			})
+		end
+	end
 
 	local titleIcon = frame:FindFirstChild("TitleIcon")
 	local iconBase = opts.Icon
@@ -4316,7 +4403,7 @@ function Tab:AddToggle(opts)
 		if type(fn) == "function" then table.insert(changedListeners, fn) end
 	end
 
-	if not noSwitch then
+	if hit then
 		hit.Activated:Connect(function() api:Set(not state) end)
 	end
 
@@ -4716,9 +4803,9 @@ function Tab:AddSubToggle(opts)
 		Parent = switch,
 	}, { round() })
 	local hit = new("TextButton", {
-		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = frame,
+		AnchorPoint = switch.AnchorPoint, Position = switch.Position,
+		Size = UDim2.fromOffset(50, 34), BackgroundTransparency = 1, Text = "", ZIndex = 6, Parent = frame,
 	})
-	hoverable(frame, hit)
 
 	local function render(instant)
 		local t = instant and 0 or 0.28
@@ -5080,7 +5167,7 @@ function Tab:AddDropdown(opts)
 	local arrow
 	if arrowUseIcon then
 		arrow = new("ImageLabel", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0, HEADER / 2),
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -9, 0, HEADER / 2),
 			Size = UDim2.fromOffset(24, 16), BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Arrow, ImageColor3 = THEME.Body, ZIndex = 4, Parent = frame,
@@ -5088,7 +5175,7 @@ function Tab:AddDropdown(opts)
 	else
 		arrow = label({
 			Text = "▾", TextSize = 12, TextColor3 = THEME.SubText,
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0, HEADER / 2),
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -13, 0, HEADER / 2),
 			Size = UDim2.fromOffset(14, 14), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 4, Parent = frame,
 		})
 	end
@@ -6735,13 +6822,18 @@ function Library:CreatePanel(opts)
 		TweenService:Create(root, TweenInfo.new(0.22, Enum.EasingStyle.Quad), { GroupTransparency = 0 }):Play()
 		playSound(SOUND_CLICK, 0.25, 1.1)
 	end
-	function panel:Hide()
+	function panel:Hide(instant)
 		if not open then return end
 		open = false
 		fadeTok += 1
 		local myTok = fadeTok
-		TweenService:Create(root, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { GroupTransparency = 1 }):Play()
-		task.delay(0.26, function() if myTok == fadeTok and not open then root.Visible = false end end)
+		if instant then
+			root.GroupTransparency = 1
+			root.Visible = false
+		else
+			TweenService:Create(root, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { GroupTransparency = 1 }):Play()
+			task.delay(0.26, function() if myTok == fadeTok and not open then root.Visible = false end end)
+		end
 		if onClose then fire(onClose) end
 	end
 	function panel:Toggle() if open then self:Hide() else self:Show() end end
@@ -6751,7 +6843,7 @@ function Library:CreatePanel(opts)
 	function panel:Destroy() pcall(function() root:Destroy() end) end
 
 	applyPin()
-	closeBtn.Activated:Connect(function() panel:Hide() end)
+	closeBtn.Activated:Connect(function() panel:Hide(true) end)
 
 	Library.InstallPanelWidgets(panel, body, nextOrder)
 
