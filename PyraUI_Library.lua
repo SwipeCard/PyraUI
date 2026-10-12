@@ -5172,8 +5172,8 @@ function Tab:AddDropdown(opts)
 			num = label({
 				Text = tostring(numbered + i - 1), Font = FONT_BOLD, TextSize = 10,
 				TextColor3 = THEME.Muted,
-				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -9, 0.5, 0),
-				Size = UDim2.fromOffset(14, 14), TextXAlignment = Enum.TextXAlignment.Right,
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
+				Size = UDim2.fromOffset(14, 14), TextXAlignment = Enum.TextXAlignment.Center,
 				ZIndex = 5, Parent = b,
 			})
 		end
