@@ -83,6 +83,7 @@ local FONT_MEDIUM = Enum.Font.GothamBold
 local FONT_BOLD   = Enum.Font.GothamBold
 local TEXT_RIGHT  = 37
 local ICON_CHIP_RIGHT = TEXT_RIGHT
+local HOLD_RIGHT = 33
 
 local LOGO_ID = "rbxassetid://138576850849681"
 local DOCK_TABS_X = 52
@@ -4226,7 +4227,7 @@ function Tab:AddToggle(opts)
 
 		bigIcon = new("ImageLabel", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -15 + (opts.IconOffsetX or 6) + 3, 0.5, 0),
+			Position = UDim2.new(1, -15 + (opts.IconOffsetX or 6) + 6, 0.5, 0),
 			Size = UDim2.fromOffset(28, 28),
 			BackgroundTransparency = 1,
 			Image = opts.Icon,
@@ -4494,7 +4495,7 @@ function Tab:AddToggle(opts)
 	if hasChip then
 		local chipState = opts.ChipDefault == true
 		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 11, FONT_BOLD)) + 4
-		local chipX = -(noSwitch and TEXT_RIGHT or (iconToggle and ICON_CHIP_RIGHT) or rightPad)
+		local chipX = -(noSwitch and HOLD_RIGHT or (iconToggle and ICON_CHIP_RIGHT) or rightPad)
 		local chipProps = {
 			Size = UDim2.fromOffset(chipW, 20),
 			BackgroundTransparency = 1,
@@ -4555,7 +4556,7 @@ function Tab:AddToggle(opts)
 				local x = -rightPad - keyChipRef.AbsoluteSize.X
 				if noSwitch or iconToggle then
 					local keyW = Library.MeasureText(keyChipRef.Text, 11, FONT_MEDIUM) + 16
-					x = math.min(chipX, -(rightPad - (opts.KeyOffsetX or 0)) - keyW - 6)
+					x = math.min(chipX, -(rightPad - (opts.KeyOffsetX or 0)) - keyW - 2)
 				end
 				chip.Position = UDim2.new(1, x, 0.5, 0)
 				if dot then dot.Position = UDim2.new(1, x - math.max(chip.TextBounds.X, 1) - 6, 0.5, 0) end
