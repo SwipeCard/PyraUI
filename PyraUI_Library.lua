@@ -50,7 +50,7 @@ local function getGuiParent()
 end
 
 local function protect(gui)
-	local fn = protectguixc
+	local fn = protectgui
 		or protect_gui
 		or (syn and syn.protect_gui)
 		or (secure_gui)
@@ -311,22 +311,47 @@ local function pollDrag(input, onFrame, onEnd)
 	return finish
 end
 
+local function safeEnum(enumType, name)
+	local ok, v = pcall(function() return enumType[name] end)
+	if ok then return v end
+	return nil
+end
+
+local MOUSE_SIDE_1 = safeEnum(Enum.UserInputType, "MouseButton4")
+local MOUSE_SIDE_2 = safeEnum(Enum.UserInputType, "MouseButton5")
+
+local SIDE_BUTTON_TYPES = {}
+local SIDE_BUTTON_NAMES = {}
+if MOUSE_SIDE_1 then SIDE_BUTTON_TYPES[MOUSE_SIDE_1] = true SIDE_BUTTON_NAMES[MOUSE_SIDE_1] = "RM1" end
+if MOUSE_SIDE_2 then SIDE_BUTTON_TYPES[MOUSE_SIDE_2] = true SIDE_BUTTON_NAMES[MOUSE_SIDE_2] = "RM2" end
+
+local function keyName(key)
+	if not key then return nil end
+	local mapped = SIDE_BUTTON_NAMES[key]
+	if mapped then return mapped end
+	if typeof(key) == "EnumItem" then return key.Name end
+	return tostring(key)
+end
+
 local function keyBus(window)
 	local bus = window._KeyBus
 	if bus then return bus end
 	bus = { handlers = {} }
 	window._KeyBus = bus
 	table.insert(window.Connections, UserInputService.InputBegan:Connect(function(input, processed)
-		if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+		local isKeyboard = input.UserInputType == Enum.UserInputType.Keyboard
+		local isSideButton = SIDE_BUTTON_TYPES[input.UserInputType] == true
+		if not isKeyboard and not isSideButton then return end
+		local code = isKeyboard and input.KeyCode or input.UserInputType
 		local cap = bus.capture
 		if cap then
 			bus.capture = nil
-			cap(input.KeyCode)
+			cap(code)
 			return
 		end
 		if processed then return end
 		local list = bus.handlers
-		for i = 1, #list do list[i](input.KeyCode) end
+		for i = 1, #list do list[i](code) end
 	end))
 	return bus
 end
@@ -595,11 +620,11 @@ function Library.new(config)
 		Name = "Shadow",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.new(1, 64, 1, 64),
+		Size = UDim2.new(1, 20, 1, 20),
 		BackgroundTransparency = 1,
 		Image = "rbxassetid://6014261993",
 		ImageColor3 = Color3.new(0, 0, 0),
-		ImageTransparency = 0.42,
+		ImageTransparency = 0.78,
 		ScaleType = Enum.ScaleType.Slice,
 		SliceCenter = Rect.new(49, 49, 450, 450),
 		ZIndex = 0,
@@ -4470,7 +4495,7 @@ function Tab:AddToggle(opts)
 			ZIndex = 7,
 			Parent = frame,
 		}, { pad(0, 4, 0, 4), new("UISizeConstraint", { MinSize = Vector2.new(24, 0) }) })
-		local function crender() chip.Text = listening and "..." or (key and key.Name or "None") end
+		local function crender() chip.Text = listening and "..." or (key and keyName(key) or "None") end
 
 		chip.Activated:Connect(function()
 			listening = true
@@ -4495,7 +4520,7 @@ function Tab:AddToggle(opts)
 	if hasChip then
 		local chipState = opts.ChipDefault == true
 		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 11, FONT_BOLD)) + 4
-		local chipX = -(noSwitch and HOLD_RIGHT or (iconToggle and ICON_CHIP_RIGHT) or rightPad)
+		local chipX = -(noSwitch and HOLD_RIGHT or (iconToggle and ICON_CHIP_RIGHT) or rightPad) - (opts.ChipOffsetX or 0)
 		local chipProps = {
 			Size = UDim2.fromOffset(chipW, 20),
 			BackgroundTransparency = 1,
@@ -5131,11 +5156,11 @@ function Tab:AddDropdown(opts)
 			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -11, 0, HEADER / 2),
 			Size = UDim2.fromOffset(24, 16), BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Fit,
-			Image = ICONS.Arrow, ImageColor3 = THEME.Body, ZIndex = 4, Parent = frame,
+			Image = ICONS.Arrow, ImageColor3 = self.Accent, ZIndex = 4, Parent = frame,
 		})
 	else
 		arrow = label({
-			Text = "▾", TextSize = 12, TextColor3 = THEME.SubText,
+			Text = "▾", TextSize = 12, TextColor3 = self.Accent,
 			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -15, 0, HEADER / 2),
 			Size = UDim2.fromOffset(14, 14), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 4, Parent = frame,
 		})
@@ -5165,7 +5190,7 @@ function Tab:AddDropdown(opts)
 		local t = instant and 0 or 0.2
 		for _, item in ipairs(items) do
 			local on = item.option == selected
-			tween(item.label, t, { TextColor3 = on and THEME.Text or THEME.SubText })
+			tween(item.label, t, { TextColor3 = on and self.Accent or THEME.SubText })
 			tween(item.dot, t, { BackgroundTransparency = on and 0 or 1 })
 			if item.num then tween(item.num, t, { TextTransparency = on and 1 or 0 }) end
 		end
@@ -5228,9 +5253,9 @@ function Tab:AddDropdown(opts)
 			if id == openId and not isOpen then list.Visible = false end
 		end)
 		if arrowUseIcon then
-			tween(arrow, 0.3, { Rotation = isOpen and 180 or 0, ImageColor3 = isOpen and THEME.Text or THEME.Body })
+			tween(arrow, 0.3, { Rotation = isOpen and 180 or 0, ImageColor3 = self.Accent })
 		else
-			tween(arrow, 0.3, { Rotation = isOpen and 180 or 0, TextColor3 = isOpen and THEME.Text or THEME.SubText })
+			tween(arrow, 0.3, { Rotation = isOpen and 180 or 0, TextColor3 = self.Accent })
 		end
 	end
 	function api:Set(option)
@@ -5965,7 +5990,7 @@ function Tab:AddKeybind(opts)
 	}, { pad(0, 2, 0, 2) })
 
 	local function render()
-		keyChip.Text = listening and "..." or (key and key.Name or "None")
+		keyChip.Text = listening and "..." or (key and keyName(key) or "None")
 	end
 
 	local api = {}
