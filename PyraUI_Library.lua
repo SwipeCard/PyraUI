@@ -5060,9 +5060,9 @@ function Tab:AddDropdown(opts)
 	local hasChip = type(opts.Chip) == "string"
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
-	local currentRightInset = 58
+	local currentRightInset = 53
 	if hasChip then
-		currentRightInset = 130
+		currentRightInset = 125
 		chipBtn = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -34, 0.5, 0),
 			Size = UDim2.fromOffset(78, 20), BackgroundColor3 = THEME.Switch,
@@ -5164,7 +5164,7 @@ function Tab:AddDropdown(opts)
 		local numbered = tonumber(opts.NumberStart)
 		local l = label({
 			Text = tostring(option), TextSize = 12, TextColor3 = THEME.SubText,
-			Position = UDim2.fromOffset(25, 0), Size = UDim2.new(1, -24, 1, 0),
+			Position = UDim2.fromOffset(3, 0), Size = UDim2.new(1, -21, 1, 0),
 			ZIndex = 5, Parent = b,
 		})
 		local num
@@ -5250,7 +5250,6 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 20
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
