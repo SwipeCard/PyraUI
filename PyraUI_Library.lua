@@ -770,7 +770,7 @@ function Library.new(config)
 	local useSearchIcon = type(ICONS.Search) == "string" and ICONS.Search ~= ""
 
 	local ICON_COLLAPSED_POS = UDim2.new(0.5, 0, 0.5, 0)
-	local ICON_EXPANDED_POS = UDim2.new(1, -6, 0.5, 0)
+	local ICON_EXPANDED_POS = UDim2.new(1, -17, 0.5, 0)
 	local icon = label({
 		Text = useSearchIcon and "" or "⌕", Font = FONT_BOLD, TextSize = 20, TextColor3 = THEME.SubText,
 		AnchorPoint = Vector2.new(0.5, 0.5), Position = ICON_COLLAPSED_POS,
@@ -790,7 +790,7 @@ function Library.new(config)
 	end
 	local searchBox = new("TextBox", {
 		Position = UDim2.fromOffset(10, 0),
-		Size = UDim2.new(1, -34, 1, 0),
+		Size = UDim2.new(1, -44, 1, 0),
 		BackgroundTransparency = 1,
 		ClearTextOnFocus = false,
 		Font = FONT,
@@ -1541,7 +1541,9 @@ function Library:SetMinimized(state)
 		end
 	end
 
-	local dockUsed = DOCK_TABS_X + (self.TabBarWidth or 0) + 48 + 88
+	local iconsW = 0
+	for _, e in ipairs(self.TabIcons or {}) do iconsW = iconsW + e.holder.Size.X.Offset + 4 end
+	local dockUsed = DOCK_TABS_X + (self.TabBarWidth or 0) + iconsW + 48 + 88
 	local miniW = math.clamp(dockUsed, 320, WINDOW_W)
 
 	if state then
@@ -3363,6 +3365,7 @@ function Library:AddTab(name, tabOpts)
 	local x = self.TabBarWidth
 	self.TabBarWidth = x + width + 4
 	self.TabBar.Size = UDim2.fromOffset(self.TabBarWidth - 4, TAB_H)
+	self:_layoutTabIcons()
 
 	local button = new("TextButton", {
 		Name = name,
@@ -3422,6 +3425,15 @@ function Library:AddTab(name, tabOpts)
 	return tab
 end
 
+function Library:_layoutTabIcons()
+	if not self.TabIcons then return end
+	local x = DOCK_TABS_X + (self.TabBarWidth or 0) + 6
+	for _, e in ipairs(self.TabIcons) do
+		e.holder.Position = UDim2.new(0, x, 0.5, 0)
+		x = x + e.holder.Size.X.Offset + 4
+	end
+end
+
 function Library:AddTabIcon(iconId, onClick, size)
 	size = size or 22
 	local holder = new("TextButton", {
@@ -3454,6 +3466,7 @@ function Library:AddTabIcon(iconId, onClick, size)
 	end)
 	self.TabIcons = self.TabIcons or {}
 	table.insert(self.TabIcons, { holder = holder, img = img })
+	self:_layoutTabIcons()
 	return holder
 end
 
@@ -5122,7 +5135,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 2
+Library.Version = 3
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
