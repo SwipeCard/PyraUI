@@ -1386,7 +1386,7 @@ end
 
 function Library.MeasureText(text, size, font)
 	local ok, v = pcall(function() return TextService:GetTextSize(text, size, font, Vector2.new(10000, 100)) end)
-	if ok and v then return v.X end
+	if ok and v and v.X > 0 then return v.X end
 	return #text * size * 0.56
 end
 
@@ -2393,6 +2393,28 @@ function Library:CreateSidePanel(opts)
 
 	local function setAbs(v) moveAbs(root, v) end
 
+	panel._priority = opts.DockPriority or W
+	local DOCK_GAP = 16
+
+	local function dockOffsetX()
+		local x = 0
+		for _, q in ipairs(win.SidePanels or {}) do
+			if q ~= panel and q._dockEligible and q._dockEligible() then
+				local ahead = q._priority > panel._priority
+					or (q._priority == panel._priority and (q._order or 0) < (panel._order or math.huge))
+				if ahead then x = x + q.Root.AbsoluteSize.X + DOCK_GAP end
+			end
+		end
+		return x
+	end
+
+	local function othersDocked()
+		for _, q in ipairs(win.SidePanels or {}) do
+			if q ~= panel and q._dockEligible and q._dockEligible() then return true end
+		end
+		return false
+	end
+
 	local lastDock = nil
 	local function dockTopLeft()
 		local h = win.Holder
@@ -2400,14 +2422,17 @@ function Library:CreateSidePanel(opts)
 		if hs.X < 8 or hs.Y < 8 then
 			return lastDock or Vector2.new(hp.X + 16, hp.Y)
 		end
-		lastDock = Vector2.new(hp.X + hs.X + 16, hp.Y + hs.Y / 2 - root.AbsoluteSize.Y / 2)
+		lastDock = Vector2.new(hp.X + hs.X + DOCK_GAP + dockOffsetX(), hp.Y + hs.Y / 2 - root.AbsoluteSize.Y / 2)
 		return lastDock
 	end
 
 	local function hideTopLeft()
+		local d = dockTopLeft()
+		if othersDocked() then
+			return Vector2.new(d.X + 36, d.Y)
+		end
 		local cam = workspace.CurrentCamera
 		local vp = (cam and cam.ViewportSize) or Vector2.new(1280, 720)
-		local d = dockTopLeft()
 		return Vector2.new(vp.X + 30, d.Y)
 	end
 
@@ -2540,6 +2565,9 @@ function Library:CreateSidePanel(opts)
 
 	local rootStroke = root:FindFirstChildOfClass("UIStroke")
 	local snapLit = false
+	panel._dockEligible = function()
+		return ((shown and not detached) or snapLit) and root.Visible
+	end
 	local function snapColor()
 		local t = panel._homeTab or win.ActiveTab
 		return (t and t.Accent) or THEME.Accent
@@ -2639,6 +2667,7 @@ function Library:CreateSidePanel(opts)
 	applyPin()
 	self.SidePanels = self.SidePanels or {}
 	table.insert(self.SidePanels, panel)
+	panel._order = #self.SidePanels
 	return panel
 end
 
@@ -3360,7 +3389,7 @@ function Library:AddTab(name, tabOpts)
 		Accent = accent, AccentInverse = accentInverse,
 	}, Tab)
 
-	local textWidth = TextService:GetTextSize(name, 13, FONT_MEDIUM, Vector2.new(1000, TAB_H)).X
+	local textWidth = Library.MeasureText(name, 13, FONT_MEDIUM)
 	local width = math.max(52, math.ceil(textWidth) + 28)
 	local x = self.TabBarWidth
 	self.TabBarWidth = x + width + 4
@@ -5135,7 +5164,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 3
+Library.Version = 5
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
