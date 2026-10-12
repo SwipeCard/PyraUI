@@ -81,10 +81,10 @@ local FONT        = Enum.Font.GothamMedium
 local FONT_MEDIUM = Enum.Font.GothamBold
 local FONT_BOLD   = Enum.Font.GothamBold
 
-local LOGO_ID = "rbxassetid://6023426921"
+local LOGO_ID = "rbxassetid://138576850849681"
 
 local ICONS = {
-	Logo = "rbxassetid://6023426921",
+	Logo = "rbxassetid://138576850849681",
 	Diamond = "rbxassetid://89788278732735",
 	Arrow = "rbxassetid://86644458913479",
 	Close = "rbxassetid://71379270081112",
@@ -673,10 +673,11 @@ function Library.new(config)
 	local logo = new("ImageLabel", {
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 14, 0.5, 0),
-		Size = UDim2.fromOffset(20, 20),
+		Size = UDim2.fromOffset(24, 24),
 		BackgroundTransparency = 1,
 		Image = LOGO_ID,
-		ImageColor3 = THEME.Accent,
+		ImageColor3 = Color3.new(1, 1, 1),
+		ScaleType = Enum.ScaleType.Fit,
 		ZIndex = 3,
 		Parent = self.Dock,
 	})
@@ -1141,7 +1142,8 @@ function Library.new(config)
 		Size = UDim2.fromOffset(24, 24),
 		BackgroundTransparency = 1,
 		Image = LOGO_ID,
-		ImageColor3 = THEME.Accent,
+		ImageColor3 = Color3.new(1, 1, 1),
+		ScaleType = Enum.ScaleType.Fit,
 		Parent = self.OpenButton,
 	})
 	self.OpenButtonScale = new("UIScale", { Scale = 0, Parent = self.OpenButton })
@@ -2934,7 +2936,7 @@ function Library:Notify(title, text, durationOrOpts)
 		Parent = header,
 	}, bareIcon and { } or { round(), stroke(Color3.new(1, 1, 1), 0.8) })
 	local notifIcon = (type(opts.Icon) == "string" and opts.Icon ~= "") and opts.Icon or LOGO_ID
-	local notifIconColor = (typeof(opts.IconColor) == "Color3") and opts.IconColor or THEME.Accent
+	local notifIconColor = (typeof(opts.IconColor) == "Color3") and opts.IconColor or ((notifIcon == LOGO_ID) and Color3.new(1, 1, 1) or THEME.Accent)
 	new("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
@@ -5133,7 +5135,7 @@ local function trackDrag(window, target, onMove, onEnd)
 	end)
 end
 
-Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true }
+Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
