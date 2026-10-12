@@ -75,7 +75,7 @@ local THEME = {
 local GLASS_DOCK_T  = 0.28
 local GLASS_PANEL_T = 0.34
 local SOLID_T       = 0
-local CARD_T        = 0.955
+local CARD_T        = 0.97
 local CARD_HOVER_T  = 0.93
 
 local FONT        = Enum.Font.GothamMedium
@@ -206,7 +206,7 @@ local function new(className, props, children)
 	return inst
 end
 
-local function corner(radius) return new("UICorner", { CornerRadius = UDim.new(0, math.max(1, radius - 3)) }) end
+local function corner(radius) return new("UICorner", { CornerRadius = UDim.new(0, math.max(1, radius - 4)) }) end
 local function round() return new("UICorner", { CornerRadius = UDim.new(1, 0) }) end
 local function stroke(color, transparency, thickness)
 	return new("UIStroke", {
@@ -1902,19 +1902,24 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 		if type(o.Chip) == "string" and o.Name then
 			local chipOn = o.ChipDefault == true
 			local chipBtn = new("TextButton", {
-				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.new(0, 10 + math.ceil(Library.MeasureText(o.Name, 10, FONT_BOLD)) + 8, 0, HEAD / 2),
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -36, 0, HEAD / 2),
 				Size = UDim2.fromOffset(44, 20),
 				BackgroundTransparency = 1,
 				AutoButtonColor = false,
 				Font = FONT_BOLD,
 				TextSize = 11,
 				TextColor3 = chipOn and THEME.Text or THEME.ChipOff,
-				TextXAlignment = Enum.TextXAlignment.Left,
+				TextXAlignment = Enum.TextXAlignment.Right,
 				Text = o.Chip,
 				ZIndex = 7,
 				Parent = wrap,
 			})
+			local function placeChip()
+				chipBtn.Position = UDim2.new(1, -36 - math.min(current.TextBounds.X, 130) - 8, 0, HEAD / 2)
+			end
+			placeChip()
+			current:GetPropertyChangedSignal("TextBounds"):Connect(placeChip)
 			local chipApi = {}
 			function chipApi:Set(on, silent)
 				on = on == true
@@ -2412,33 +2417,15 @@ function Library:CreateSidePanel(opts)
 	local function setAbs(v) moveAbs(root, v) end
 
 	panel._priority = opts.DockPriority or W
-	panel._defaultRank = -panel._priority
-	panel._rank = panel._defaultRank
 	local DOCK_GAP = 16
-
-	local function rankOf(p) return p._rank or -(p._priority or 0) end
-	local function sortedDocked(exclude)
-		local list = {}
-		for _, q in ipairs(win.SidePanels or {}) do
-			if q ~= exclude and q._dockEligible and q._dockEligible() then list[#list + 1] = q end
-		end
-		table.sort(list, function(x, y)
-			local rx, ry = rankOf(x), rankOf(y)
-			if rx ~= ry then return rx < ry end
-			return (x._order or 0) < (y._order or 0)
-		end)
-		return list
-	end
 
 	local function dockOffsetX()
 		local x = 0
-		local rp, op = rankOf(panel), panel._order or math.huge
 		for _, q in ipairs(win.SidePanels or {}) do
 			if q ~= panel and q._dockEligible and q._dockEligible() then
-				local rq = rankOf(q)
-				if rq < rp or (rq == rp and (q._order or 0) < op) then
-					x = x + q.Root.AbsoluteSize.X + DOCK_GAP
-				end
+				local ahead = q._priority > panel._priority
+					or (q._priority == panel._priority and (q._order or 0) < (panel._order or math.huge))
+				if ahead then x = x + q.Root.AbsoluteSize.X + DOCK_GAP end
 			end
 		end
 		return x
@@ -2552,15 +2539,12 @@ function Library:CreateSidePanel(opts)
 	end
 
 	function panel:IsDetached() return detached end
-	panel._reattach = reattach
-	panel._isFloating = function() return detached and root.Visible and not dragging end
 	function panel:IsShown() return shown end
 	function panel:Close()
 		if not (shown or detached) then return end
 		detached = false
 		shown = false
 		fadeTok += 1
-		panel._rank = panel._defaultRank
 		root.GroupTransparency = 1
 		root.Visible = false
 	end
@@ -2633,11 +2617,8 @@ function Library:CreateSidePanel(opts)
 	}, { corner(10), stroke(Color3.new(1, 1, 1), 1) })
 	local ghostStroke = ghost:FindFirstChildOfClass("UIStroke")
 
-	local function setSnapHint(on, slot)
-		if on == snapLit then
-			if on and slot then moveAbs(ghost, slot) end
-			return
-		end
+	local function setSnapHint(on)
+		if on == snapLit then return end
 		snapLit = on
 		local c = snapColor()
 		if rootStroke then
@@ -2649,7 +2630,7 @@ function Library:CreateSidePanel(opts)
 		if on then
 			ghost.Size = UDim2.fromOffset(math.max(60, root.AbsoluteSize.X), math.max(60, root.AbsoluteSize.Y))
 			ghost.Visible = true
-			moveAbs(ghost, slot or dockTopLeft())
+			moveAbs(ghost, dockTopLeft())
 			ghost.BackgroundColor3 = c
 			ghostStroke.Color = c
 			tween(ghost, 0.15, { BackgroundTransparency = 0.9 })
@@ -2661,67 +2642,8 @@ function Library:CreateSidePanel(opts)
 		end
 	end
 
-	local function provisionalRank()
-		local list = sortedDocked(panel)
-		if #list == 0 then return panel._defaultRank end
-		local o = dockOrigin()
-		local x = o.X
-		local cx = root.AbsolutePosition.X + root.AbsoluteSize.X / 2
-		local idx = 0
-		for i, q in ipairs(list) do
-			local w = q.Root.AbsoluteSize.X
-			if cx > x + w / 2 then idx = i end
-			x = x + w + DOCK_GAP
-		end
-		if idx == 0 then return rankOf(list[1]) - 1 end
-		if idx == #list then return rankOf(list[#list]) + 1 end
-		return (rankOf(list[idx]) + rankOf(list[idx + 1])) / 2
-	end
-
-	local function bestSnap()
-		local pos = root.AbsolutePosition
-		local kind, slot, info
-		local chainSlot = dockTopLeft()
-		local bestDist = (pos - chainSlot).Magnitude
-		if bestDist < DOCK_SNAP_RADIUS then
-			kind, slot = "chain", chainSlot
-		else
-			bestDist = math.huge
-		end
-		if not mainVisible() and #sortedDocked(panel) == 0 then
-			local sz = root.AbsoluteSize
-			for _, q in ipairs(win.SidePanels or {}) do
-				if q ~= panel and q._isFloating and q._isFloating() then
-					local qp, qs = q.Root.AbsolutePosition, q.Root.AbsoluteSize
-					local y = qp.Y + qs.Y / 2 - sz.Y / 2
-					local right = Vector2.new(qp.X + qs.X + DOCK_GAP, y)
-					local left = Vector2.new(qp.X - DOCK_GAP - sz.X, y)
-					local dr, dl = (pos - right).Magnitude, (pos - left).Magnitude
-					if dr < DOCK_SNAP_RADIUS and dr < bestDist then
-						kind, slot, bestDist, info = "free", right, dr, { other = q, side = 1 }
-					end
-					if dl < DOCK_SNAP_RADIUS and dl < bestDist then
-						kind, slot, bestDist, info = "free", left, dl, { other = q, side = -1 }
-					end
-				end
-			end
-		end
-		return kind, slot, info
-	end
-
-	local function joinFree(other, side)
-		local sz = root.AbsoluteSize
-		local op, osz = other.Root.AbsolutePosition, other.Root.AbsoluteSize
-		local cy = op.Y + osz.Y / 2
-		if side == 1 then
-			win._dockOrigin = Vector2.new(op.X, cy)
-			other._rank, panel._rank = 0, 1
-		else
-			win._dockOrigin = Vector2.new(op.X - DOCK_GAP - sz.X, cy)
-			panel._rank, other._rank = 0, 1
-		end
-		if other._reattach then other._reattach() end
-		reattach()
+	local function nearDock()
+		return mainVisible() and (root.AbsolutePosition - dockTopLeft()).Magnitude < DOCK_SNAP_RADIUS
 	end
 
 	dragHandle.InputBegan:Connect(function(input)
@@ -2735,18 +2657,12 @@ function Library:CreateSidePanel(opts)
 			if input.UserInputState ~= Enum.UserInputState.End then return end
 			conn:Disconnect()
 			dragging = false
-			if not detached then
-				setSnapHint(false)
-				return
-			end
-			local kind, _, info = bestSnap()
+			local snap = detached and nearDock()
 			setSnapHint(false)
-			if kind == "chain" then
+			if not detached then return end
+			if snap then
 				reattach()
-			elseif kind == "free" then
-				joinFree(info.other, info.side)
 			else
-				panel._rank = panel._defaultRank
 				target = root.AbsolutePosition
 			end
 		end)
@@ -2763,9 +2679,7 @@ function Library:CreateSidePanel(opts)
 			return
 		end
 		followCursor(mouse)
-		panel._rank = provisionalRank()
-		local kind, slot = bestSnap()
-		setSnapHint(kind ~= nil, slot)
+		setSnapHint(nearDock())
 	end))
 
 	function panel:_uiHidden()
@@ -5121,7 +5035,7 @@ function Tab:AddDropdown(opts)
 	local hasChip = type(opts.Chip) == "string"
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
-	local currentRightInset = 58
+	local currentRightInset = 34
 	if hasChip then
 		currentRightInset = 130
 		chipBtn = new("TextButton", {
