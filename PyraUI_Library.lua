@@ -921,7 +921,7 @@ function Library.new(config)
 		}, { corner(1) })
 	end
 	local premiumLabel = label({
-		Text = "Premium", Font = FONT_BOLD, TextSize = 13,
+		Text = "Premium User", Font = FONT_BOLD, TextSize = 13,
 		TextColor3 = Color3.new(1, 1, 1),
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 67, 0, 33), Size = UDim2.fromOffset(0, 16),
@@ -5034,7 +5034,7 @@ function Tab:AddDropdown(opts)
 	local hasChip = type(opts.Chip) == "string"
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
-	local currentRightInset = 46
+	local currentRightInset = 58
 	if hasChip then
 		currentRightInset = 130
 		chipBtn = new("TextButton", {
