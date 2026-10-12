@@ -1084,7 +1084,7 @@ function Library.new(config)
 		Name = "OpenButton",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 16, 0.5, 0),
-		Size = UDim2.fromOffset(46, 46),
+		Size = UDim2.fromOffset(58, 58),
 		BackgroundColor3 = THEME.Glass,
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
@@ -1095,7 +1095,7 @@ function Library.new(config)
 	new("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(24, 24),
+		Size = UDim2.fromOffset(32, 32),
 		BackgroundTransparency = 1,
 		Image = LOGO_ID,
 		ImageColor3 = Color3.new(1, 1, 1),
