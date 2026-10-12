@@ -5164,7 +5164,7 @@ function Tab:AddDropdown(opts)
 		local numbered = tonumber(opts.NumberStart)
 		local l = label({
 			Text = tostring(option), TextSize = 12, TextColor3 = THEME.SubText,
-			Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, -18, 1, 0),
+			Position = UDim2.fromOffset(2, 0), Size = UDim2.new(1, -20, 1, 0),
 			ZIndex = 5, Parent = b,
 		})
 		local num
