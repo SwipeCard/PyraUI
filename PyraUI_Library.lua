@@ -369,8 +369,7 @@ local function fire(callback, ...)
 	if type(callback) ~= "function" then return end
 	local args = table.pack(...)
 	task.spawn(function()
-		local ok, err = pcall(callback, table.unpack(args, 1, args.n))
-		if not ok then warn("[PYRA] callback error: " .. tostring(err)) end
+		pcall(callback, table.unpack(args, 1, args.n))
 	end)
 end
 
