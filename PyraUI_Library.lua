@@ -911,6 +911,7 @@ function Library.new(config)
 		ZIndex = 3,
 		Parent = self.Footer,
 	}, { round() })
+	self.FooterAvatar = avatar
 	local onlineDot = new("Frame", {
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, 1, 1, 1),
@@ -1367,6 +1368,18 @@ end
 
 function Library:Toggle()
 	if self.Open then self:Hide() else self:Show() end
+end
+
+function Library:SetFooterAvatar(userId)
+	local img = self.FooterAvatar
+	if not img then return end
+	userId = tonumber(userId) or Players.LocalPlayer.UserId
+	task.spawn(function()
+		local ok, image = pcall(function()
+			return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+		end)
+		if ok and image and img.Parent then img.Image = image end
+	end)
 end
 
 function Library.MeasureText(text, size, font)
