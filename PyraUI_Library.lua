@@ -337,42 +337,10 @@ local function glassify(frame, transparency, radius)
 	frame.BorderSizePixel = 0
 	corner(radius).Parent = frame
 	stroke(Color3.new(1, 1, 1), 0.88).Parent = frame
-	new("ImageLabel", {
-		Name = "Noise",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Image = "rbxassetid://9968344227",
-		ImageTransparency = 0.94,
-		ScaleType = Enum.ScaleType.Tile,
-		TileSize = UDim2.fromOffset(128, 128),
-		ZIndex = frame.ZIndex,
-		Parent = frame,
-	}, { corner(radius) })
-	new("Frame", {
-		Name = "Sheen",
-		Size = UDim2.new(1, 0, 0.6, 0),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.95,
-		BorderSizePixel = 0,
-		ZIndex = frame.ZIndex,
-		Parent = frame,
-	}, {
-		corner(radius),
-		new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0, 1) }),
-	})
 end
 
 local acrylicDof
-local function ensureDof()
-	if acrylicDof and acrylicDof.Parent then return end
-	acrylicDof = Instance.new("DepthOfFieldEffect")
-	acrylicDof.Name = "PyraAcrylic"
-	acrylicDof.FarIntensity = 0
-	acrylicDof.NearIntensity = 1
-	acrylicDof.InFocusRadius = 0.1
-	acrylicDof.Enabled = false
-	acrylicDof.Parent = Lighting
-end
+local function ensureDof() end
 
 local function mapRange(v, inMin, inMax, outMin, outMax)
 	return (v - inMin) * (outMax - outMin) / (inMax - inMin) + outMin
@@ -393,61 +361,7 @@ local function screenToWorld(point, distance)
 end
 
 local function createAcrylic(frame)
-	ensureDof()
-	local part = new("Part", {
-		Name = "PyraGlass",
-		Color = Color3.new(0, 0, 0),
-		Material = Enum.Material.Glass,
-		Size = Vector3.new(1, 1, 0),
-		Anchored = true,
-		CanCollide = false,
-		CanQuery = false,
-		CanTouch = false,
-		CastShadow = false,
-		Transparency = 1,
-	})
-	local mesh = new("SpecialMesh", {
-		MeshType = Enum.MeshType.Brick,
-		Offset = Vector3.new(0, 0, -1e-6),
-		Parent = part,
-	})
-	part.Parent = workspace
-
-	local obj = { Part = part, Visible = false }
-	local lastT, lastCF, lastPos, lastSize, lastVpY, cachedInset, lastFov, lastStamp
-	function obj:Update()
-		if not self.Visible or not frame.Visible or frame.AbsoluteSize.X < 4 or frame.AbsoluteSize.Y < 4 then
-			if lastT ~= 1 then part.Transparency = 1 lastT = 1 end
-			return
-		end
-		if lastT ~= 0.98 then part.Transparency = 0.98 lastT = 0.98 end
-
-		local vpY = camera.ViewportSize.Y
-		if vpY ~= lastVpY then
-			lastVpY = vpY
-			cachedInset = mapRange(vpY, 0, 2560, 8, 56)
-		end
-
-		local cf = camera.CFrame
-		local fov = camera.FieldOfView
-		local aPos, aSize = frame.AbsolutePosition, frame.AbsoluteSize
-		local now = os.clock()
-		local stale = (lastStamp == nil) or ((now - lastStamp) > 0.2)
-		if not stale and cf == lastCF and fov == lastFov and aPos == lastPos and aSize == lastSize then return end
-		lastCF, lastFov, lastPos, lastSize, lastStamp = cf, fov, aPos, aSize, now
-
-		local inset = cachedInset
-		local size = aSize - Vector2.new(inset, inset)
-		local pos = aPos + Vector2.new(inset / 2, inset / 2)
-		local d = 0.001
-		local tl = screenToWorld(pos, d)
-		local tr = screenToWorld(pos + Vector2.new(size.X, 0), d)
-		local br = screenToWorld(pos + size, d)
-		part.CFrame = CFrame.fromMatrix((tl + br) / 2, cf.XVector, cf.YVector, cf.ZVector)
-		mesh.Scale = Vector3.new((tr - tl).Magnitude, (tr - br).Magnitude, 0)
-	end
-	function obj:Destroy() part:Destroy() end
-	return obj
+	return { Visible = false, Update = function() end, Destroy = function() end }
 end
 
 local STATUS_GREEN = Color3.fromRGB(90, 220, 130)
@@ -967,11 +881,6 @@ function Library.new(config)
 		ZIndex = 4,
 		Parent = avatar,
 	}, { round(), stroke(THEME.Glass, 0, 2) })
-	TweenService:Create(
-		onlineDot,
-		TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-		{ BackgroundTransparency = 0.45 }
-	):Play()
 	task.spawn(function()
 		local ok, image = pcall(function()
 			return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
@@ -998,11 +907,6 @@ function Library.new(config)
 			ZIndex = 3,
 			Parent = self.Footer,
 		})
-		TweenService:Create(
-			diamond,
-			TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-			{ ImageTransparency = 0.35 }
-		):Play()
 	else
 		diamond = new("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1014,11 +918,6 @@ function Library.new(config)
 			ZIndex = 3,
 			Parent = self.Footer,
 		}, { corner(1) })
-		TweenService:Create(
-			diamond,
-			TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-			{ BackgroundTransparency = 0.35 }
-		):Play()
 	end
 	local premiumLabel = label({
 		Text = "Premium", Font = FONT_BOLD, TextSize = 13,
@@ -2144,12 +2043,6 @@ function Library:CreateSidePanel(opts)
 	if not self.AcrylicEnabled then root.BackgroundTransparency = SOLID_T end
 	local panelScale = self:_trackScale(root)
 
-	new("ImageLabel", {
-		Name = "Noise", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
-		Image = "rbxassetid://9968344227", ImageTransparency = 0.94,
-		ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(128, 128),
-		ZIndex = 2, Parent = root,
-	}, { corner(10) })
 
 	local header = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 40),
@@ -2938,7 +2831,7 @@ function Library:SetFPSCap(n)
 end
 
 function Library:SetAcrylic(state)
-	self.AcrylicEnabled = state == true
+	self.AcrylicEnabled = false
 	local dockT = self.AcrylicEnabled and GLASS_DOCK_T or SOLID_T
 	local panelT = self.AcrylicEnabled and GLASS_PANEL_T or SOLID_T
 	tween(self.Dock, 0.3, { BackgroundTransparency = dockT })
@@ -4453,7 +4346,7 @@ function Tab:AddToggle(opts)
 		local listening = false
 		local chip = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -rightPad, 0.5, 0),
+			Position = UDim2.new(1, -rightPad + (opts.KeyOffsetX or 0), 0.5, 0),
 			Size = UDim2.fromOffset(0, 24),
 			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundTransparency = 1,
@@ -5069,9 +4962,9 @@ function Tab:AddDropdown(opts)
 	local hasChip = type(opts.Chip) == "string"
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
-	local currentRightInset = 34
+	local currentRightInset = 42
 	if hasChip then
-		currentRightInset = 118
+		currentRightInset = 126
 		chipBtn = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -34, 0.5, 0),
 			Size = UDim2.fromOffset(78, 20), BackgroundColor3 = THEME.Switch,
@@ -5115,7 +5008,7 @@ function Tab:AddDropdown(opts)
 	local arrow
 	if arrowUseIcon then
 		arrow = new("ImageLabel", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0, HEADER / 2),
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0, HEADER / 2),
 			Size = UDim2.fromOffset(24, 16), BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Arrow, ImageColor3 = THEME.Body, ZIndex = 4, Parent = frame,
@@ -5123,7 +5016,7 @@ function Tab:AddDropdown(opts)
 	else
 		arrow = label({
 			Text = "▾", TextSize = 12, TextColor3 = THEME.SubText,
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0, HEADER / 2),
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -20, 0, HEADER / 2),
 			Size = UDim2.fromOffset(14, 14), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 4, Parent = frame,
 		})
 	end
@@ -5259,7 +5152,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 16
+Library.Version = 17
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
@@ -6186,7 +6079,7 @@ function Tab:AddPlayerSearch(opts)
 
 	local box = new("TextBox", {
 		Position = UDim2.new(0, 12, 0, 8),
-		Size = UDim2.new(1, -52, 0, 24),
+		Size = UDim2.new(1, -60, 0, 24),
 		BackgroundColor3 = THEME.Card,
 		BackgroundTransparency = 1,
 		ClearTextOnFocus = false,
@@ -6200,7 +6093,7 @@ function Tab:AddPlayerSearch(opts)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 6,
 		Parent = frame,
-	}, { pad(0, 8, 0, 8) })
+	}, { pad(0, 8, 0, 0) })
 	local boxStroke = box:FindFirstChildOfClass("UIStroke")
 
 	local focusBlocker = new("TextButton", {
@@ -6230,7 +6123,7 @@ function Tab:AddPlayerSearch(opts)
 
 	local searchBtn = new("TextButton", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(1, -20, 0.5, 0),
+		Position = UDim2.new(1, -26, 0.5, 0),
 		Size = UDim2.fromOffset(38, 38),
 		BackgroundColor3 = THEME.Card,
 		BackgroundTransparency = 1,
@@ -6641,12 +6534,6 @@ function Library:CreatePanel(opts)
 		table.insert(self.Acrylic, a)
 	end
 
-	new("ImageLabel", {
-		Name = "Noise", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
-		Image = "rbxassetid://9968344227", ImageTransparency = 0.94,
-		ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(128, 128),
-		ZIndex = 2, Parent = root,
-	}, { corner(12) })
 
 	local header = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, ZIndex = 3, Parent = root,
