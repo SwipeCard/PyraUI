@@ -82,7 +82,7 @@ local FONT        = Enum.Font.GothamMedium
 local FONT_MEDIUM = Enum.Font.GothamBold
 local FONT_BOLD   = Enum.Font.GothamBold
 local TEXT_RIGHT  = 37
-local ICON_CHIP_RIGHT = 45
+local ICON_CHIP_RIGHT = TEXT_RIGHT
 
 local LOGO_ID = "rbxassetid://138576850849681"
 local DOCK_TABS_X = 52
@@ -4226,8 +4226,8 @@ function Tab:AddToggle(opts)
 
 		bigIcon = new("ImageLabel", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -15 + (opts.IconOffsetX or 6), 0.5, 0),
-			Size = UDim2.fromOffset(34, 34),
+			Position = UDim2.new(1, -15 + (opts.IconOffsetX or 6) + 3, 0.5, 0),
+			Size = UDim2.fromOffset(28, 28),
 			BackgroundTransparency = 1,
 			Image = opts.Icon,
 			ImageColor3 = THEME.SubText,
@@ -4553,7 +4553,10 @@ function Tab:AddToggle(opts)
 		if hasKey and keyChipRef and not inlineRow then
 			local function reposition()
 				local x = -rightPad - keyChipRef.AbsoluteSize.X
-				if noSwitch or iconToggle then x = math.min(chipX, x - 6) end
+				if noSwitch or iconToggle then
+					local keyW = Library.MeasureText(keyChipRef.Text, 11, FONT_MEDIUM) + 16
+					x = math.min(chipX, -(rightPad - (opts.KeyOffsetX or 0)) - keyW - 6)
+				end
 				chip.Position = UDim2.new(1, x, 0.5, 0)
 				if dot then dot.Position = UDim2.new(1, x - math.max(chip.TextBounds.X, 1) - 6, 0.5, 0) end
 			end
