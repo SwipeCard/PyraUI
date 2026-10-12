@@ -83,7 +83,7 @@ local FONT_MEDIUM = Enum.Font.GothamBold
 local FONT_BOLD   = Enum.Font.GothamBold
 local TEXT_RIGHT  = 37
 local ICON_CHIP_RIGHT = TEXT_RIGHT
-local HOLD_RIGHT = 40
+local HOLD_RIGHT = 75
 
 local LOGO_ID = "rbxassetid://138576850849681"
 local DOCK_TABS_X = 52
