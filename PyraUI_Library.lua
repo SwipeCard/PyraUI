@@ -1669,6 +1669,17 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 	local function widgetHost()
 		if not joinCard then return body, false end
 		joinCount = joinCount + 1
+		if joinCount > 1 then
+			new("Frame", {
+				Size = UDim2.new(1, 0, 0, 1),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BackgroundTransparency = 0.9,
+				BorderSizePixel = 0,
+				LayoutOrder = nextOrder(),
+				ZIndex = 5,
+				Parent = joinCard,
+			})
+		end
 		return joinCard, true
 	end
 	function panel:BeginJoin()
@@ -3543,6 +3554,16 @@ local function elementFrame(tab, height)
 	f:SetAttribute("RestT", row and 1 or CARD_T)
 	if not row then
 		stroke(Color3.new(1, 1, 1), 0.92).Parent = f
+	elseif ord > 1 then
+		new("Frame", {
+			Position = UDim2.fromOffset(12, 0),
+			Size = UDim2.new(1, -24, 0, 1),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.9,
+			BorderSizePixel = 0,
+			ZIndex = 4,
+			Parent = f,
+		})
 	end
 	return f
 end
@@ -5152,7 +5173,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 17
+Library.Version = 18
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
