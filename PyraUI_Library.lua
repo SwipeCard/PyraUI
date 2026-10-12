@@ -5060,7 +5060,7 @@ function Tab:AddDropdown(opts)
 	local hasChip = type(opts.Chip) == "string"
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
-	local currentRightInset = 55
+	local currentRightInset = 45
 	if hasChip then
 		currentRightInset = 130
 		chipBtn = new("TextButton", {
