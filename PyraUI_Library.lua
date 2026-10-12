@@ -122,7 +122,7 @@ task.spawn(function()
 	for _, a in ipairs(assets) do a:Destroy() end
 end)
 
-local WINDOW_W = 550
+local WINDOW_W = 530
 local DOCK_H   = 44
 local GAP      = 8
 local PANEL_H  = 380
@@ -745,7 +745,7 @@ function Library.new(config)
 
 	self.SearchIndex = {}
 	local searchOpen = false
-	local SEARCH_W = 100
+	local SEARCH_W = 90
 
 	local search = new("Frame", {
 		Name = "Search",
@@ -1770,17 +1770,6 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 	local function widgetHost()
 		if not joinCard then return body, false end
 		joinCount = joinCount + 1
-		if joinCount > 1 then
-			new("Frame", {
-				Size = UDim2.new(1, 0, 0, 1),
-				BackgroundColor3 = Color3.new(1, 1, 1),
-				BackgroundTransparency = 0.9,
-				BorderSizePixel = 0,
-				LayoutOrder = nextOrder(),
-				ZIndex = 5,
-				Parent = joinCard,
-			})
-		end
 		return joinCard, true
 	end
 	function panel:BeginJoin()
@@ -1960,7 +1949,7 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 				BackgroundTransparency = 1,
 				AutoButtonColor = false,
 				Font = FONT_BOLD,
-				TextSize = chipOn and 12 or 10,
+				TextSize = 11,
 				TextColor3 = chipOn and THEME.Text or THEME.ChipOff,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				Text = o.Chip,
@@ -1972,7 +1961,7 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 				on = on == true
 				if on == chipOn then return end
 				chipOn = on
-				tween(chipBtn, 0.2, { TextColor3 = on and THEME.Text or THEME.ChipOff, TextSize = on and 12 or 10 })
+				chipBtn.TextColor3 = on and THEME.Text or THEME.ChipOff
 				if not silent then
 					playSound(SOUND_CLICK, 0.22, on and 1.05 or 0.95)
 					fire(o.ChipCallback, on)
@@ -3344,7 +3333,7 @@ function Library:_showSearchPage()
 		task.delay(0.25, function()
 			if self._searchActive then old.Visible = false end
 		end)
-		tween(self.ActiveTab.Button, 0.25, { TextColor3 = THEME.SubText })
+		self.ActiveTab.Button.TextColor3 = THEME.SubText
 		if self.ActiveTab.Icon then tween(self.ActiveTab.Icon, 0.25, { ImageColor3 = THEME.SubText }) end
 	end
 	self.SearchPage.Visible = true
@@ -3536,12 +3525,6 @@ function Library:AddTab(name, tabOpts)
 	})
 	tab.Page, tab.Container = page, scroll
 
-	button.MouseEnter:Connect(function()
-		if self.ActiveTab ~= tab then tween(button, 0.2, { TextColor3 = THEME.Text }) end
-	end)
-	button.MouseLeave:Connect(function()
-		if self.ActiveTab ~= tab then tween(button, 0.2, { TextColor3 = THEME.SubText }) end
-	end)
 	button.Activated:Connect(function()
 		if self.Minimized then self:SetMinimized(false) end
 		self:SelectTab(tab)
@@ -3613,7 +3596,7 @@ function Library:SelectTab(tab, instant)
 	local tIn, tOut = 0.26, 0.12
 
 	if previous then
-		tween(previous.Button, 0.25, { TextColor3 = THEME.SubText })
+		previous.Button.TextColor3 = THEME.SubText
 		local oldPage = previous.Page
 		local dir = tab.Index > previous.Index and -1 or 1
 		tween(oldPage, tOut, { GroupTransparency = 1, Position = UDim2.fromOffset(14 * dir, 0) }, Enum.EasingStyle.Quad)
@@ -3625,12 +3608,8 @@ function Library:SelectTab(tab, instant)
 		end)
 	end
 
-	if instant then
-		tab.Button.TextColor3 = tab.Accent
-	else
-		if previous then playSound(SOUND_CLICK, 0.2, 1.1) end
-		tween(tab.Button, 0.25, { TextColor3 = tab.Accent })
-	end
+	if previous and not instant then playSound(SOUND_CLICK, 0.2, 1.1) end
+	tab.Button.TextColor3 = tab.Accent
 
 	local page = tab.Page
 	page.Visible = true
@@ -3671,16 +3650,6 @@ local function elementFrame(tab, height)
 	f:SetAttribute("RestT", row and 1 or CARD_T)
 	if not row then
 		stroke(Color3.new(1, 1, 1), 0.92).Parent = f
-	elseif ord > 1 then
-		new("Frame", {
-			Position = UDim2.fromOffset(12, 0),
-			Size = UDim2.new(1, -24, 0, 1),
-			BackgroundColor3 = Color3.new(1, 1, 1),
-			BackgroundTransparency = 0.9,
-			BorderSizePixel = 0,
-			ZIndex = 4,
-			Parent = f,
-		})
 	end
 	return f
 end
@@ -4152,10 +4121,11 @@ function Tab:AddToggle(opts)
 	if chipInline then inset = hasKey and 110 or 70 end
 	local noSwitch = opts.NoSwitch == true
 	local circle = opts.Circle == true and not noSwitch
-	local rightPad = noSwitch and 4 or 60
+	local rightPad = noSwitch and 8 or 60
 	if noSwitch then inset = math.max(inset - 48, 50) end
 	local inlineRow
 	local iconToggle = opts.IconToggle == true and type(opts.Icon) == "string" and opts.Icon ~= ""
+	if iconToggle and not noSwitch then rightPad = 53 end
 	if circle then rightPad = 52 end
 	if sliderOpts then
 		label({
@@ -4496,16 +4466,14 @@ function Tab:AddToggle(opts)
 		}, { pad(0, 4, 0, 4), new("UISizeConstraint", { MinSize = Vector2.new(24, 0) }) })
 		local function crender() chip.Text = listening and "..." or (key and key.Name or "None") end
 
-		chip.MouseEnter:Connect(function() if not listening then tween(chip, 0.15, { TextColor3 = THEME.Text }) end end)
-		chip.MouseLeave:Connect(function() if not listening then tween(chip, 0.15, { TextColor3 = THEME.Body }) end end)
 		chip.Activated:Connect(function()
 			listening = true
 			crender()
 			playSound(SOUND_CLICK, 0.25, 1.1)
-			tween(chip, 0.2, { TextColor3 = THEME.Text })
+			chip.TextColor3 = THEME.Text
 			beginCapture(self.Window, function(keyCode)
 				listening = false
-				tween(chip, 0.2, { TextColor3 = THEME.Body })
+				chip.TextColor3 = THEME.Body
 				if keyCode ~= Enum.KeyCode.Escape then
 					key = keyCode
 					fire(opts.KeybindChanged, key)
@@ -4520,14 +4488,14 @@ function Tab:AddToggle(opts)
 
 	if hasChip then
 		local chipState = opts.ChipDefault == true
-		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 12, FONT_BOLD)) + 4
+		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 11, FONT_BOLD)) + 4
 		local chipX = -rightPad
 		local chipProps = {
 			Size = UDim2.fromOffset(chipW, 20),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = chipState and 12 or 10,
+			TextSize = 11,
 			TextColor3 = chipState and THEME.Text or THEME.ChipOff,
 			TextXAlignment = Enum.TextXAlignment.Right,
 			Text = opts.Chip,
@@ -4543,7 +4511,7 @@ function Tab:AddToggle(opts)
 		end
 		local chip = new("TextButton", chipProps)
 		local function chrender()
-			tween(chip, 0.2, { TextColor3 = chipState and THEME.Text or THEME.ChipOff, TextSize = chipState and 12 or 10 })
+			chip.TextColor3 = chipState and THEME.Text or THEME.ChipOff
 		end
 		local chipApi = {}
 		function chipApi:Set(on)
@@ -4938,7 +4906,7 @@ function Tab:AddSlider(opts)
 
 	if type(opts.Chip) == "string" then
 		local chipState = opts.ChipDefault == true
-		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 12, FONT_BOLD)) + 10
+		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 11, FONT_BOLD)) + 10
 		local chip = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -8 - 88 - 2, 0, 5),
@@ -4946,14 +4914,14 @@ function Tab:AddSlider(opts)
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = chipState and 12 or 10,
+			TextSize = 11,
 			TextColor3 = chipState and THEME.Text or THEME.ChipOff,
 			Text = opts.Chip,
 			ZIndex = 7,
 			Parent = frame,
 		})
 		local function chrender()
-			tween(chip, 0.2, { TextColor3 = chipState and THEME.Text or THEME.ChipOff, TextSize = chipState and 12 or 10 })
+			chip.TextColor3 = chipState and THEME.Text or THEME.ChipOff
 		end
 		local chipApi = {}
 		function chipApi:Set(on)
@@ -5291,7 +5259,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 14
+Library.Version = 16
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
@@ -5726,7 +5694,7 @@ function Tab:AddRandomSlider(opts)
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Font = FONT_BOLD,
-		TextSize = randomize and 12 or 10,
+		TextSize = 11,
 		TextColor3 = randomize and THEME.Text or THEME.ChipOff,
 		Text = "RANDOM",
 		ZIndex = 7,
@@ -5736,14 +5704,14 @@ function Tab:AddRandomSlider(opts)
 	local extraChip
 	if type(opts.Chip) == "string" then
 		local st = opts.ChipDefault == true
-		local w = math.ceil(Library.MeasureText(tostring(opts.Chip), 12, FONT_BOLD)) + 10
+		local w = math.ceil(Library.MeasureText(tostring(opts.Chip), 11, FONT_BOLD)) + 10
 		extraChip = new("TextButton", {
 			Size = UDim2.fromOffset(w, 20),
 			LayoutOrder = 3,
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = st and 12 or 10,
+			TextSize = 11,
 			TextColor3 = st and THEME.Text or THEME.ChipOff,
 			Text = opts.Chip,
 			ZIndex = 7,
@@ -5754,7 +5722,7 @@ function Tab:AddRandomSlider(opts)
 			on = on == true
 			if on == st then return end
 			st = on
-			tween(extraChip, 0.2, { TextColor3 = on and THEME.Text or THEME.ChipOff, TextSize = on and 12 or 10 })
+			extraChip.TextColor3 = on and THEME.Text or THEME.ChipOff
 			playSound(SOUND_CLICK, 0.22, on and 1.05 or 0.95)
 			fire(opts.ChipCallback, on)
 		end
@@ -5842,7 +5810,7 @@ function Tab:AddRandomSlider(opts)
 		on = on == true
 		if on == randomize then return end
 		randomize = on
-		tween(rngChip, 0.25, { TextColor3 = on and THEME.Text or THEME.ChipOff, TextSize = on and 12 or 10 })
+		rngChip.TextColor3 = on and THEME.Text or THEME.ChipOff
 
 		morphing = true
 		morphTok += 1
@@ -5956,7 +5924,6 @@ function Tab:AddRandomSlider(opts)
 	end)
 
 	rngChip.TextColor3 = randomize and THEME.Text or THEME.ChipOff
-	rngChip.TextSize = randomize and 12 or 10
 	render(true)
 	self.Window:_registerFlag(opts.Flag, api, "randomslider")
 	return api
@@ -5984,8 +5951,6 @@ function Tab:AddKeybind(opts)
 		ZIndex = 6,
 		Parent = frame,
 	}, { pad(0, 2, 0, 2) })
-	keyChip.MouseEnter:Connect(function() if not listening then tween(keyChip, 0.15, { TextColor3 = THEME.Text }) end end)
-	keyChip.MouseLeave:Connect(function() if not listening then tween(keyChip, 0.15, { TextColor3 = THEME.Body }) end end)
 
 	local function render()
 		keyChip.Text = listening and "..." or (key and key.Name or "None")
@@ -6003,10 +5968,10 @@ function Tab:AddKeybind(opts)
 		listening = true
 		render()
 		playSound(SOUND_CLICK, 0.25, 1.1)
-		tween(keyChip, 0.2, { TextColor3 = THEME.Text })
+		keyChip.TextColor3 = THEME.Text
 		beginCapture(self.Window, function(keyCode)
 			listening = false
-			tween(keyChip, 0.2, { TextColor3 = THEME.Body })
+			keyChip.TextColor3 = THEME.Body
 			if keyCode == Enum.KeyCode.Escape then
 				if opts.AllowNone == false then render() else api:Set(nil) end
 			else
