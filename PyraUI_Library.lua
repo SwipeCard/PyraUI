@@ -83,7 +83,7 @@ local FONT_MEDIUM = Enum.Font.GothamBold
 local FONT_BOLD   = Enum.Font.GothamBold
 local TEXT_RIGHT  = 37
 local ICON_CHIP_RIGHT = TEXT_RIGHT
-local HOLD_RIGHT = 45
+local HOLD_RIGHT = 40
 
 local LOGO_ID = "rbxassetid://138576850849681"
 local DOCK_TABS_X = 52
@@ -4495,7 +4495,7 @@ function Tab:AddToggle(opts)
 	if hasChip then
 		local chipState = opts.ChipDefault == true
 		local chipW = math.ceil(Library.MeasureText(tostring(opts.Chip), 11, FONT_BOLD)) + 4
-		local chipX = -(noSwitch and HOLD_RIGHT or (iconToggle and ICON_CHIP_RIGHT) or rightPad)
+		local chipX = -(noSwitch and HOLD_RIGHT or (iconToggle and ICON_CHIP_RIGHT) or rightPad) - (opts.ChipOffsetX or 0)
 		local chipProps = {
 			Size = UDim2.fromOffset(chipW, 20),
 			BackgroundTransparency = 1,
