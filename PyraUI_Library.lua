@@ -66,6 +66,7 @@ local THEME = {
 	Body          = Color3.fromRGB(220, 220, 226),
 	SubText       = Color3.fromRGB(150, 150, 160),
 	Muted         = Color3.fromRGB(90, 90, 100),
+	ChipOff       = Color3.fromRGB(110, 110, 120),
 	Premium       = Color3.fromRGB(255, 205, 70),
 	Accent        = Color3.fromRGB(255, 255, 255),
 	AccentInverse = Color3.fromRGB(10, 10, 12),
@@ -121,7 +122,7 @@ task.spawn(function()
 	for _, a in ipairs(assets) do a:Destroy() end
 end)
 
-local WINDOW_W = 640
+local WINDOW_W = 600
 local DOCK_H   = 44
 local GAP      = 8
 local PANEL_H  = 380
@@ -205,7 +206,7 @@ local function new(className, props, children)
 	return inst
 end
 
-local function corner(radius) return new("UICorner", { CornerRadius = UDim.new(0, radius > 3 and radius - 1 or radius) }) end
+local function corner(radius) return new("UICorner", { CornerRadius = UDim.new(0, radius > 3 and radius - 2 or radius) }) end
 local function round() return new("UICorner", { CornerRadius = UDim.new(1, 0) }) end
 local function stroke(color, transparency, thickness)
 	return new("UIStroke", {
@@ -693,15 +694,6 @@ function Library.new(config)
 		Parent = self.Dock,
 	})
 	self.TabBarWidth = 0
-	self.Pill = new("Frame", {
-		Name = "Pill",
-		Size = UDim2.fromOffset(60, TAB_H),
-		BackgroundColor3 = THEME.Accent,
-		BorderSizePixel = 0,
-		Visible = false,
-		ZIndex = 3,
-		Parent = self.TabBar,
-	}, { corner(8) })
 
 	local function dockButton(text, xOffset, iconId)
 		local useIcon = type(iconId) == "string" and iconId ~= ""
@@ -736,11 +728,11 @@ function Library.new(config)
 			})
 		end
 		b.MouseEnter:Connect(function()
-			tween(b, 0.2, { BackgroundTransparency = 0.9, TextColor3 = THEME.Text })
+			tween(b, 0.2, { TextColor3 = THEME.Text })
 			if img then tween(img, 0.2, { ImageColor3 = THEME.Text }) end
 		end)
 		b.MouseLeave:Connect(function()
-			tween(b, 0.2, { BackgroundTransparency = 1, TextColor3 = THEME.SubText })
+			tween(b, 0.2, { TextColor3 = THEME.SubText })
 			if img then tween(img, 0.2, { ImageColor3 = THEME.SubText }) end
 		end)
 		return b
@@ -753,34 +745,30 @@ function Library.new(config)
 
 	self.SearchIndex = {}
 	local searchOpen = false
-	local COLLAPSED, EXPANDED = 28, 150
+	local SEARCH_W = 110
 
 	local search = new("Frame", {
 		Name = "Search",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -78, 0.5, 0),
-		Size = UDim2.fromOffset(COLLAPSED, 28),
-		BackgroundColor3 = THEME.Card,
-
+		Size = UDim2.fromOffset(28, 28),
 		BackgroundTransparency = 1,
 		ZIndex = 8,
 		Parent = self.Dock,
-	}, { corner(8), stroke(Color3.new(1, 1, 1), 1) })
-	local searchStroke = search:FindFirstChildOfClass("UIStroke")
+	})
 	local useSearchIcon = type(ICONS.Search) == "string" and ICONS.Search ~= ""
 
-	local ICON_COLLAPSED_POS = UDim2.new(0.5, 0, 0.5, 0)
-	local ICON_EXPANDED_POS = UDim2.new(1, -17, 0.5, 0)
+	local ICON_POS = UDim2.new(0.5, 0, 0.5, 0)
 	local icon = label({
 		Text = useSearchIcon and "" or "⌕", Font = FONT_BOLD, TextSize = 20, TextColor3 = THEME.SubText,
-		AnchorPoint = Vector2.new(0.5, 0.5), Position = ICON_COLLAPSED_POS,
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = ICON_POS,
 		Size = UDim2.fromOffset(22, 24), TextXAlignment = Enum.TextXAlignment.Center,
 		ZIndex = 9, Parent = search,
 	})
 	local searchImg
 	if useSearchIcon then
 		searchImg = new("ImageLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5), Position = ICON_COLLAPSED_POS,
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = ICON_POS,
 			Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit,
 			Image = ICONS.Search, ImageColor3 = THEME.Body, ZIndex = 9, Parent = search,
 		})
@@ -789,8 +777,9 @@ function Library.new(config)
 		end)
 	end
 	local searchBox = new("TextBox", {
-		Position = UDim2.fromOffset(10, 0),
-		Size = UDim2.new(1, -44, 1, 0),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(0, -6, 0, 0),
+		Size = UDim2.fromOffset(SEARCH_W, 28),
 		BackgroundTransparency = 1,
 		ClearTextOnFocus = false,
 		Font = FONT,
@@ -799,10 +788,10 @@ function Library.new(config)
 		PlaceholderText = "Search settings...",
 		PlaceholderColor3 = THEME.Muted,
 		Text = "",
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Right,
 		TextEditable = false,
 		Visible = false,
-		ZIndex = 6,
+		ZIndex = 9,
 		Parent = search,
 	})
 	local iconBtn = new("TextButton", {
@@ -825,33 +814,24 @@ function Library.new(config)
 		if open then
 			searchBox.Visible = true
 			searchBox.TextEditable = true
-			tween(search, 0.3, { Size = UDim2.fromOffset(EXPANDED, 28), BackgroundTransparency = 0.92 }, Enum.EasingStyle.Quint)
-			tween(searchStroke, 0.3, { Transparency = 0.82 })
-			tween(icon, 0.2, { TextColor3 = THEME.Text, Position = ICON_EXPANDED_POS })
-			if searchImg then tween(searchImg, 0.2, { Position = ICON_EXPANDED_POS }) end
-			task.delay(0.12, function() if searchOpen then searchBox:CaptureFocus() end end)
+			tween(icon, 0.2, { TextColor3 = THEME.Text })
+			task.defer(function() if searchOpen then searchBox:CaptureFocus() end end)
 			playSound(SOUND_CLICK, 0.22, 1.1)
 		else
 			searchBox.Text = ""
 			searchBox.TextEditable = false
 			searchBox.Visible = false
-
-			tween(search, 0.3, { Size = UDim2.fromOffset(COLLAPSED, 28), BackgroundTransparency = 1 }, Enum.EasingStyle.Quint)
-			tween(searchStroke, 0.3, { Transparency = 1, Color = Color3.new(1, 1, 1) })
-			tween(icon, 0.2, { TextColor3 = THEME.SubText, Position = ICON_COLLAPSED_POS })
-			if searchImg then tween(searchImg, 0.2, { Position = ICON_COLLAPSED_POS }) end
+			tween(icon, 0.2, { TextColor3 = THEME.SubText })
 			self:_hideSearchPage()
 		end
 	end
 	self._collapseSearch = function() setSearch(false) end
 
 	iconBtn.MouseEnter:Connect(function()
-		if not searchOpen then tween(search, 0.2, { BackgroundTransparency = 0.9 }) end
 		if icon then tween(icon, 0.2, { TextColor3 = THEME.Text }) end
 	end)
 	iconBtn.MouseLeave:Connect(function()
-		if not searchOpen then tween(search, 0.2, { BackgroundTransparency = 1 }) end
-		if icon then tween(icon, 0.2, { TextColor3 = THEME.SubText }) end
+		if icon and not searchOpen then tween(icon, 0.2, { TextColor3 = THEME.SubText }) end
 	end)
 
 	iconBtn.Activated:Connect(function()
@@ -864,7 +844,6 @@ function Library.new(config)
 		searchToken += 1
 		local token = searchToken
 		if q ~= "" then
-			tween(searchStroke, 0.2, { Transparency = 0.3, Color = THEME.Accent })
 			self:_showSearchPage()
 			local text = searchBox.Text
 			task.delay(0.05, function()
@@ -872,7 +851,6 @@ function Library.new(config)
 				self:_updateSearchPage(text)
 			end)
 		else
-			tween(searchStroke, 0.2, { Transparency = 0.82, Color = Color3.new(1, 1, 1) })
 			self:_hideSearchPage()
 		end
 	end)
@@ -1971,7 +1949,7 @@ function Library.InstallPanelWidgets(panel, body, nextOrder)
 					Font = FONT, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
 					TextColor3 = (opt == selected) and THEME.Text or THEME.SubText,
 					Text = tostring(opt), ZIndex = 6, Parent = listFrame,
-				}, { corner(5), pad(0, 24, 0, 10) })
+				}, { pad(0, 24, 0, 10) })
 				if opt == selected then
 					new("Frame", {
 						AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
@@ -3293,7 +3271,6 @@ function Library:_showSearchPage()
 		tween(self.ActiveTab.Button, 0.25, { TextColor3 = THEME.SubText })
 		if self.ActiveTab.Icon then tween(self.ActiveTab.Icon, 0.25, { ImageColor3 = THEME.SubText }) end
 	end
-	tween(self.Pill, 0.3, { Size = UDim2.fromOffset(self.Pill.Size.X.Offset, 0) })
 	self.SearchPage.Visible = true
 	self.SearchPage.Position = UDim2.fromOffset(20, 0)
 	tween(self.SearchPage, 0.3, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) })
@@ -3572,21 +3549,12 @@ function Library:SelectTab(tab, instant)
 		end)
 	end
 
-	local pillPos, pillSize = tab.Button.Position, tab.Button.Size
-	if instant or not self.Pill.Visible then
-		self.Pill.Position = pillPos
-		self.Pill.Size = pillSize
-		self.Pill.Visible = true
-	else
-		tween(self.Pill, 0.4, { Position = pillPos, Size = pillSize })
-		playSound(SOUND_CLICK, 0.2, 1.1)
-	end
 	if instant then
-		self.Pill.BackgroundColor3 = tab.Accent
+		tab.Button.TextColor3 = tab.Accent
 	else
-		tween(self.Pill, 0.4, { BackgroundColor3 = tab.Accent })
+		if previous then playSound(SOUND_CLICK, 0.2, 1.1) end
+		tween(tab.Button, 0.25, { TextColor3 = tab.Accent })
 	end
-	tween(tab.Button, 0.25, { TextColor3 = tab.AccentInverse })
 
 	local page = tab.Page
 	page.Visible = true
@@ -4363,18 +4331,18 @@ function Tab:AddToggle(opts)
 			sValLabel.Text = sfmt(sval) .. ssuffix
 		end
 		api.Slider = {}
-		function api.Slider:Set(v)
+		function api.Slider:Set(v, instant)
 			v = ssnap(tonumber(v) or sval)
 			if v == sval then return end
 			sval = v
-			srender(false)
+			srender(instant == true)
 			fire(sliderOpts.Callback, sval)
 		end
 		function api.Slider:Get() return sval end
 		local function sFromX(x)
 			local pos, size = strack.AbsolutePosition.X, strack.AbsoluteSize.X
 			if size <= 0 then return end
-			api.Slider:Set(smin + (smax - smin) * math.clamp((x - pos) / size, 0, 1))
+			api.Slider:Set(smin + (smax - smin) * math.clamp((x - pos) / size, 0, 1), true)
 		end
 		local sdrag = false
 		shit.InputBegan:Connect(function(input)
@@ -4402,28 +4370,26 @@ function Tab:AddToggle(opts)
 			Position = UDim2.new(1, -rightPad, 0.5, 0),
 			Size = UDim2.fromOffset(0, 20),
 			AutomaticSize = Enum.AutomaticSize.X,
-			BackgroundColor3 = THEME.Card,
-			BackgroundTransparency = 0.92,
+			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_MEDIUM,
 			TextSize = 11,
-			TextColor3 = THEME.Text,
+			TextColor3 = THEME.Body,
 			ZIndex = 7,
 			Parent = frame,
-		}, { corner(5), stroke(Color3.new(1, 1, 1), 0.85), pad(0, 8, 0, 8) })
-		local chipStroke = chip:FindFirstChildOfClass("UIStroke")
+		}, { pad(0, 4, 0, 4) })
 		local function crender() chip.Text = listening and "..." or (key and key.Name or "None") end
 
-		chip.MouseEnter:Connect(function() if not listening then tween(chip, 0.15, { BackgroundTransparency = 0.86 }) end end)
-		chip.MouseLeave:Connect(function() if not listening then tween(chip, 0.15, { BackgroundTransparency = 0.92 }) end end)
+		chip.MouseEnter:Connect(function() if not listening then tween(chip, 0.15, { TextColor3 = THEME.Text }) end end)
+		chip.MouseLeave:Connect(function() if not listening then tween(chip, 0.15, { TextColor3 = THEME.Body }) end end)
 		chip.Activated:Connect(function()
 			listening = true
 			crender()
 			playSound(SOUND_CLICK, 0.25, 1.1)
-			tween(chipStroke, 0.2, { Transparency = 0.3 })
+			tween(chip, 0.2, { TextColor3 = THEME.Text })
 			beginCapture(self.Window, function(keyCode)
 				listening = false
-				tween(chipStroke, 0.2, { Transparency = 0.85 })
+				tween(chip, 0.2, { TextColor3 = THEME.Body })
 				if keyCode ~= Enum.KeyCode.Escape then
 					key = keyCode
 					fire(opts.KeybindChanged, key)
@@ -4442,11 +4408,11 @@ function Tab:AddToggle(opts)
 		local chipX = -rightPad
 		local chipProps = {
 			Size = UDim2.fromOffset(chipW, 20),
-			BackgroundColor3 = chipState and self.Accent or THEME.Switch,
+			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = 9,
-			TextColor3 = chipState and self.AccentInverse or THEME.Text,
+			TextSize = 10,
+			TextColor3 = chipState and THEME.Text or THEME.ChipOff,
 			Text = opts.Chip,
 			ZIndex = 7,
 			Parent = frame,
@@ -4458,10 +4424,9 @@ function Tab:AddToggle(opts)
 			chipProps.AnchorPoint = Vector2.new(1, 0.5)
 			chipProps.Position = UDim2.new(1, chipX, 0.5, 0)
 		end
-		local chip = new("TextButton", chipProps, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
+		local chip = new("TextButton", chipProps)
 		local function chrender()
-			tween(chip, 0.2, { BackgroundColor3 = chipState and self.Accent or THEME.Switch })
-			chip.TextColor3 = chipState and self.AccentInverse or THEME.Text
+			tween(chip, 0.2, { TextColor3 = chipState and THEME.Text or THEME.ChipOff })
 		end
 		local chipApi = {}
 		function chipApi:Set(on)
@@ -4844,11 +4809,11 @@ function Tab:AddSlider(opts)
 	end
 
 	local api = {}
-	function api:Set(v)
+	function api:Set(v, instant)
 		v = snap(tonumber(v) or min)
 		if v == value then return end
 		value = v
-		render(false)
+		render(instant == true)
 		fire(opts.Callback, value)
 	end
 	function api:Get() return value end
@@ -4860,18 +4825,17 @@ function Tab:AddSlider(opts)
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -8 - 88 - 8, 0, 5),
 			Size = UDim2.fromOffset(chipW, 20),
-			BackgroundColor3 = chipState and self.Accent or THEME.Switch,
+			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = 9,
-			TextColor3 = chipState and self.AccentInverse or THEME.Text,
+			TextSize = 10,
+			TextColor3 = chipState and THEME.Text or THEME.ChipOff,
 			Text = opts.Chip,
 			ZIndex = 7,
 			Parent = frame,
-		}, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
+		})
 		local function chrender()
-			tween(chip, 0.2, { BackgroundColor3 = chipState and self.Accent or THEME.Switch })
-			chip.TextColor3 = chipState and self.AccentInverse or THEME.Text
+			tween(chip, 0.2, { TextColor3 = chipState and THEME.Text or THEME.ChipOff })
 		end
 		local chipApi = {}
 		function chipApi:Set(on)
@@ -4890,7 +4854,7 @@ function Tab:AddSlider(opts)
 	local function setFromX(x)
 		local pos, size = track.AbsolutePosition.X, track.AbsoluteSize.X
 		if size <= 0 then return end
-		api:Set(min + (max - min) * math.clamp((x - pos) / size, 0, 1))
+		api:Set(min + (max - min) * math.clamp((x - pos) / size, 0, 1), true)
 	end
 
 	frame.MouseEnter:Connect(function()
@@ -5119,7 +5083,7 @@ function Tab:AddDropdown(opts)
 			LayoutOrder = i,
 			ZIndex = 5,
 			Parent = list,
-		}, { corner(5) })
+		})
 		local numbered = tonumber(opts.NumberStart)
 		local l = label({
 			Text = tostring(option), TextSize = 12, TextColor3 = THEME.SubText,
@@ -5209,7 +5173,7 @@ local function trackDrag(window, target, onMove, onEnd)
 end
 
 Library.Features = { NoSwitch = true, Indicator = true, Collapsible = true, SkipIntro = true }
-Library.Version = 7
+Library.Version = 9
 
 function Library.BuildSubMarker(frame, height, opts)
 	opts = opts or {}
@@ -5509,12 +5473,12 @@ function Tab:AddRangeSlider(opts)
 	end
 
 	local api = {}
-	function api:Set(newLo, newHi)
+	function api:Set(newLo, newHi, instant)
 		newLo, newHi = snap(tonumber(newLo) or lo), snap(tonumber(newHi) or hi)
 		if newLo > newHi then newLo, newHi = newHi, newLo end
 		if newLo == lo and newHi == hi then return end
 		lo, hi = newLo, newHi
-		render(false)
+		render(instant == true)
 		fire(opts.Callback, lo, hi)
 	end
 	function api:Get() return lo, hi end
@@ -5541,9 +5505,9 @@ function Tab:AddRangeSlider(opts)
 			tween(valueLabel, 0.2, { TextColor3 = THEME.Text })
 		end
 		if active == "lo" then
-			if x > hi then active = "hi" api:Set(hi, x) else api:Set(x, hi) end
+			if x > hi then active = "hi" api:Set(hi, x, true) else api:Set(x, hi, true) end
 		else
-			if x < lo then active = "lo" api:Set(x, lo) else api:Set(lo, x) end
+			if x < lo then active = "lo" api:Set(x, lo, true) else api:Set(lo, x, true) end
 		end
 	end, function()
 		tween(knobLo, 0.25, { Size = UDim2.fromOffset(12, 12) })
@@ -5641,16 +5605,15 @@ function Tab:AddRandomSlider(opts)
 	local rngChip = new("TextButton", {
 		Size = UDim2.fromOffset(62, 20),
 		LayoutOrder = 2,
-		BackgroundColor3 = randomize and ACC or OFF_BG,
-		BackgroundTransparency = randomize and 0 or OFF_T,
+		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Font = FONT_BOLD,
-		TextSize = 9,
-		TextColor3 = randomize and ACCI or THEME.Text,
+		TextSize = 10,
+		TextColor3 = randomize and THEME.Text or THEME.ChipOff,
 		Text = "RANDOM",
 		ZIndex = 7,
 		Parent = headRow,
-	}, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
+	})
 
 	local extraChip
 	if type(opts.Chip) == "string" then
@@ -5659,23 +5622,21 @@ function Tab:AddRandomSlider(opts)
 		extraChip = new("TextButton", {
 			Size = UDim2.fromOffset(w, 20),
 			LayoutOrder = 3,
-			BackgroundColor3 = st and ACC or OFF_BG,
-			BackgroundTransparency = st and 0 or OFF_T,
+			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = FONT_BOLD,
-			TextSize = 9,
-			TextColor3 = st and ACCI or THEME.Text,
+			TextSize = 10,
+			TextColor3 = st and THEME.Text or THEME.ChipOff,
 			Text = opts.Chip,
 			ZIndex = 7,
 			Parent = headRow,
-		}, { corner(5), stroke(Color3.new(1, 1, 1), 0.82) })
+		})
 		local eApi = {}
 		function eApi:Set(on)
 			on = on == true
 			if on == st then return end
 			st = on
-			tween(extraChip, 0.2, { BackgroundColor3 = on and ACC or OFF_BG, BackgroundTransparency = on and 0 or OFF_T })
-			extraChip.TextColor3 = on and ACCI or THEME.Text
+			tween(extraChip, 0.2, { TextColor3 = on and THEME.Text or THEME.ChipOff })
 			playSound(SOUND_CLICK, 0.22, on and 1.05 or 0.95)
 			fire(opts.ChipCallback, on)
 		end
@@ -5763,8 +5724,7 @@ function Tab:AddRandomSlider(opts)
 		on = on == true
 		if on == randomize then return end
 		randomize = on
-		tween(rngChip, 0.25, { BackgroundColor3 = on and ACC or OFF_BG, BackgroundTransparency = on and 0 or OFF_T })
-		rngChip.TextColor3 = on and ACCI or THEME.Text
+		tween(rngChip, 0.25, { TextColor3 = on and THEME.Text or THEME.ChipOff })
 
 		morphing = true
 		morphTok += 1
@@ -5812,7 +5772,7 @@ function Tab:AddRandomSlider(opts)
 		end
 		return val
 	end
-	function api:Set(a, b)
+	function api:Set(a, b, instant)
 		if randomize then
 			local nl, nh = snap(tonumber(a) or lo), snap(tonumber(b) or hi)
 			if nl > nh then nl, nh = nh, nl end
@@ -5820,7 +5780,7 @@ function Tab:AddRandomSlider(opts)
 		else
 			val = snap(tonumber(a) or val)
 		end
-		render(false)
+		render(instant == true)
 		fire(opts.Callback, api:Config())
 	end
 
@@ -5847,12 +5807,12 @@ function Tab:AddRandomSlider(opts)
 		end
 		if randomize then
 			if active == "lo" then
-				if x > hi then active = "hi" api:Set(hi, x) else api:Set(x, hi) end
+				if x > hi then active = "hi" api:Set(hi, x, true) else api:Set(x, hi, true) end
 			else
-				if x < lo then active = "lo" api:Set(x, lo) else api:Set(lo, x) end
+				if x < lo then active = "lo" api:Set(x, lo, true) else api:Set(lo, x, true) end
 			end
 		else
-			api:Set(x)
+			api:Set(x, nil, true)
 		end
 	end, function()
 		tween(valueLabel, 0.2, { TextColor3 = THEME.SubText })
@@ -5877,9 +5837,7 @@ function Tab:AddRandomSlider(opts)
 		render(true)
 	end)
 
-	rngChip.TextColor3 = randomize and self.AccentInverse or THEME.Text
-	rngChip.BackgroundColor3 = randomize and self.Accent or OFF_BG
-	rngChip.BackgroundTransparency = randomize and 0 or OFF_T
+	rngChip.TextColor3 = randomize and THEME.Text or THEME.ChipOff
 	render(true)
 	self.Window:_registerFlag(opts.Flag, api, "randomslider")
 	return api
@@ -5899,16 +5857,16 @@ function Tab:AddKeybind(opts)
 		Position = UDim2.new(1, -12, 0.5, 0),
 		Size = UDim2.fromOffset(0, 24),
 		AutomaticSize = Enum.AutomaticSize.X,
-		BackgroundColor3 = THEME.Card,
-		BackgroundTransparency = 0.92,
+		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Font = FONT_MEDIUM,
 		TextSize = 12,
-		TextColor3 = THEME.Text,
+		TextColor3 = THEME.Body,
 		ZIndex = 6,
 		Parent = frame,
-	}, { corner(6), stroke(Color3.new(1, 1, 1), 0.85), pad(0, 10, 0, 10) })
-	local chipStroke = keyChip:FindFirstChildOfClass("UIStroke")
+	}, { pad(0, 2, 0, 2) })
+	keyChip.MouseEnter:Connect(function() if not listening then tween(keyChip, 0.15, { TextColor3 = THEME.Text }) end end)
+	keyChip.MouseLeave:Connect(function() if not listening then tween(keyChip, 0.15, { TextColor3 = THEME.Body }) end end)
 
 	local function render()
 		keyChip.Text = listening and "..." or (key and key.Name or "None")
@@ -5926,10 +5884,10 @@ function Tab:AddKeybind(opts)
 		listening = true
 		render()
 		playSound(SOUND_CLICK, 0.25, 1.1)
-		tween(chipStroke, 0.2, { Transparency = 0.3 })
+		tween(keyChip, 0.2, { TextColor3 = THEME.Text })
 		beginCapture(self.Window, function(keyCode)
 			listening = false
-			tween(chipStroke, 0.2, { Transparency = 0.85 })
+			tween(keyChip, 0.2, { TextColor3 = THEME.Body })
 			if keyCode == Enum.KeyCode.Escape then
 				if opts.AllowNone == false then render() else api:Set(nil) end
 			else
@@ -6198,7 +6156,7 @@ function Tab:AddPlayerSearch(opts)
 		Text = "",
 		ZIndex = 7,
 		Parent = frame,
-	}, { corner(6), stroke(Color3.new(1, 1, 1), 0.88) })
+	})
 	local useSearchIcon = type(ICONS.Search) == "string" and ICONS.Search ~= ""
 	if useSearchIcon then
 		new("ImageLabel", {
@@ -6512,8 +6470,14 @@ function Tab:AddPlayerSearch(opts)
 			tween(frame, 0.15, { Size = UDim2.new(1, 0, 0, HEADER + listH) })
 		end
 	end)
-	searchBtn.MouseEnter:Connect(function() tween(searchBtn, 0.15, { BackgroundTransparency = 0.9 }) end)
-	searchBtn.MouseLeave:Connect(function() tween(searchBtn, 0.15, { BackgroundTransparency = 1 }) end)
+	searchBtn.MouseEnter:Connect(function()
+		local ic = searchBtn:FindFirstChildOfClass("ImageLabel")
+		if ic then tween(ic, 0.15, { ImageColor3 = THEME.Text }) end
+	end)
+	searchBtn.MouseLeave:Connect(function()
+		local ic = searchBtn:FindFirstChildOfClass("ImageLabel")
+		if ic then tween(ic, 0.15, { ImageColor3 = THEME.Body }) end
+	end)
 
 	return api
 end
