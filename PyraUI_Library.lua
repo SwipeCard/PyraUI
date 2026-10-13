@@ -5187,13 +5187,14 @@ function Tab:AddDropdown(opts)
 	self.Window:_index(self, frame, opts.Name or "Dropdown", opts.Description)
 
 	local hasChip = type(opts.Chip) == "string"
+	local inlineChip = hasChip and opts.ChipInline == true
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
 	local currentRightInset = TEXT_RIGHT + 4
 	-- chip layout: [pad][dot][gap][text][tail] when off, [tail][text][gap][dot][pad] when on
 	local CHIP_PAD, CHIP_DOT, CHIP_GAP, CHIP_TAIL = 5, 12, 5, 8
 	local chipTextW, chipW = 0, 70
-	if hasChip then
+	if hasChip and not inlineChip then
 		chipTextW = math.ceil(Library.MeasureText(tostring(opts.Chip), 10, FONT_BOLD)) + 2
 		chipW = math.max(70, CHIP_PAD + CHIP_DOT + CHIP_GAP + chipTextW + CHIP_TAIL)
 		currentRightInset = 34 + chipW + 11
@@ -5214,6 +5215,18 @@ function Tab:AddDropdown(opts)
 		})
 	end
 
+	if inlineChip then
+		-- plain text chip right after the title: gray when off, white when on
+		local titleW = math.ceil(Library.MeasureText(tostring(opts.Name or "Dropdown"), 13, FONT_MEDIUM)) + 2
+		local textW = math.ceil(Library.MeasureText(tostring(opts.Chip), 11, FONT_BOLD)) + 6
+		chipBtn = new("TextButton", {
+			Position = UDim2.fromOffset(12 + titleW + 8, 0), Size = UDim2.fromOffset(textW, HEADER),
+			BackgroundTransparency = 1, AutoButtonColor = false, Font = FONT_BOLD, TextSize = 11,
+			TextColor3 = chipState and THEME.Text or THEME.ChipOff, TextXAlignment = Enum.TextXAlignment.Left,
+			Text = opts.Chip, ZIndex = 7, Parent = frame,
+		})
+	end
+
 	local current = label({
 		Font = FONT_BOLD, TextSize = 11, TextColor3 = THEME.SubText,
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -currentRightInset, 0, 0), Size = UDim2.new(0.5, -currentRightInset, 0, HEADER),
@@ -5224,6 +5237,10 @@ function Tab:AddDropdown(opts)
 	if hasChip then
 		local function renderChip(instant)
 			local t = instant and 0 or 0.2
+			if inlineChip then
+				tween(chipBtn, t, { TextColor3 = chipState and THEME.Text or THEME.ChipOff })
+				return
+			end
 			tween(chipBtn, t, { BackgroundColor3 = chipState and self.Accent or THEME.Switch })
 			tween(chipDot, t, { BackgroundColor3 = chipState and self.AccentInverse or THEME.SubText,
 				Position = chipState and UDim2.new(0, chipW - CHIP_PAD - CHIP_DOT, 0.5, 0) or UDim2.new(0, CHIP_PAD, 0.5, 0) })
