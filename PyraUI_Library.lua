@@ -5295,16 +5295,22 @@ function Tab:AddDropdown(opts)
 
 	local chipApi
 	if hasChip then
+		local chipTweens = {}
 		local function renderChip(instant)
+			-- An instant (silent) update has to stop a fade that is still running, or the
+			-- old fade finishes afterwards and leaves the chip showing the opposite state
+			-- (a locked-on chip that is clicked would end up gray while it is really on).
+			for _, tw in ipairs(chipTweens) do tw:Cancel() end
+			table.clear(chipTweens)
 			local t = instant and 0 or 0.2
 			if inlineChip then
-				tween(chipBtn, t, { TextColor3 = chipState and THEME.Text or THEME.ChipOff })
+				chipTweens[1] = tween(chipBtn, t, { TextColor3 = chipState and THEME.Text or THEME.ChipOff })
 				return
 			end
-			tween(chipBtn, t, { BackgroundColor3 = chipState and self.Accent or THEME.Switch })
-			tween(chipDot, t, { BackgroundColor3 = chipState and self.AccentInverse or THEME.SubText,
+			chipTweens[1] = tween(chipBtn, t, { BackgroundColor3 = chipState and self.Accent or THEME.Switch })
+			chipTweens[2] = tween(chipDot, t, { BackgroundColor3 = chipState and self.AccentInverse or THEME.SubText,
 				Position = chipState and UDim2.new(0, chipW - CHIP_PAD - CHIP_DOT, 0.5, 0) or UDim2.new(0, CHIP_PAD, 0.5, 0) })
-			tween(chipLabel, t, { TextColor3 = chipState and self.AccentInverse or THEME.SubText,
+			chipTweens[3] = tween(chipLabel, t, { TextColor3 = chipState and self.AccentInverse or THEME.SubText,
 				Position = chipState and UDim2.new(0, CHIP_TAIL, 0.5, 0) or UDim2.new(0, CHIP_PAD + CHIP_DOT + CHIP_GAP, 0.5, 0) })
 		end
 		renderChip(true)
