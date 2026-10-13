@@ -4494,23 +4494,48 @@ function Tab:AddToggle(opts)
 	end
 
 	local keyChipRef
+	-- KeyInline: instead of the big bind text at the right edge, the bind is a
+	-- small chip in the title row (after any inline chip), styled like one.
+	local keyInline = hasKey and opts.KeyInline == true and inlineRow ~= nil
 	if hasKey then
 		local key = opts.Keybind
 		local listening = false
-		local chip = new("TextButton", {
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -rightPad + (opts.KeyOffsetX or 0), 0.5, 0),
-			Size = UDim2.fromOffset(0, 24),
-			AutomaticSize = Enum.AutomaticSize.X,
-			BackgroundTransparency = 1,
-			AutoButtonColor = false,
-			Font = FONT_BOLD,
-			TextSize = 16,
-			TextColor3 = THEME.Body,
-			ZIndex = 7,
-			Parent = frame,
-		}, { pad(0, 4, 0, 4), new("UISizeConstraint", { MinSize = Vector2.new(24, 0) }) })
-		local function crender() chip.Text = listening and "..." or (key and keyName(key) or "None") end
+		local emptyText = opts.KeyEmptyText or "None"
+		local chip
+		if keyInline then
+			chip = new("TextButton", {
+				LayoutOrder = 3,
+				Size = UDim2.fromOffset(0, 20),
+				AutomaticSize = Enum.AutomaticSize.X,
+				BackgroundTransparency = 1,
+				AutoButtonColor = false,
+				Font = FONT_BOLD,
+				TextSize = 11,
+				TextColor3 = THEME.ChipOff,
+				ZIndex = 7,
+				Parent = inlineRow,
+			}, { pad(0, 2, 0, 2) })
+		else
+			chip = new("TextButton", {
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -rightPad + (opts.KeyOffsetX or 0), 0.5, 0),
+				Size = UDim2.fromOffset(0, 24),
+				AutomaticSize = Enum.AutomaticSize.X,
+				BackgroundTransparency = 1,
+				AutoButtonColor = false,
+				Font = FONT_BOLD,
+				TextSize = 16,
+				TextColor3 = THEME.Body,
+				ZIndex = 7,
+				Parent = frame,
+			}, { pad(0, 4, 0, 4), new("UISizeConstraint", { MinSize = Vector2.new(24, 0) }) })
+		end
+		local function crender() chip.Text = listening and "..." or (key and keyName(key) or emptyText) end
+		-- Inline: gray until a key is set (same on/off look as the other chips).
+		local function idleColor()
+			if keyInline then return key and THEME.Text or THEME.ChipOff end
+			return THEME.Body
+		end
 
 		chip.Activated:Connect(function()
 			listening = true
@@ -4519,17 +4544,21 @@ function Tab:AddToggle(opts)
 			chip.TextColor3 = THEME.Text
 			beginCapture(self.Window, function(keyCode)
 				listening = false
-				chip.TextColor3 = THEME.Body
 				if keyCode ~= Enum.KeyCode.Escape then
 					key = keyCode
 					fire(opts.KeybindChanged, key)
 				end
 				crender()
+				chip.TextColor3 = idleColor()
 			end)
 		end)
 		crender()
+		chip.TextColor3 = idleColor()
 		keyChipRef = chip
-		api.Keybind = { Get = function() return key end, Set = function(_, k) key = k crender() end }
+		api.Keybind = {
+			Get = function() return key end,
+			Set = function(_, k) key = k crender() chip.TextColor3 = idleColor() end,
+		}
 	end
 
 	if hasChip then
@@ -4573,7 +4602,7 @@ function Tab:AddToggle(opts)
 		api.Chip = chipApi
 
 		local dot
-		if opts.Indicator and not inlineRow then
+		if opts.Indicator then
 			dot = new("Frame", {
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.new(1, chipX - chipW - 5, 0.5, 0),
@@ -4589,6 +4618,22 @@ function Tab:AddToggle(opts)
 					tween(dot, 0.15, { BackgroundTransparency = on and 0 or 1 })
 				end,
 			}
+		end
+
+		if inlineRow and dot then
+			-- The chip sits inline with the title, so park the status dot just
+			-- left of the bind (or near the right edge when there is no bind).
+			local function placeDot()
+				local x = -rightPad + (opts.KeyOffsetX or 0)
+				if keyChipRef and not keyInline then
+					x = x - keyChipRef.AbsoluteSize.X - 8
+				else
+					x = x - 4
+				end
+				dot.Position = UDim2.new(1, x, 0.5, 0)
+			end
+			if keyChipRef and not keyInline then keyChipRef:GetPropertyChangedSignal("AbsoluteSize"):Connect(placeDot) end
+			task.defer(placeDot)
 		end
 
 		if hasKey and keyChipRef and not inlineRow then
