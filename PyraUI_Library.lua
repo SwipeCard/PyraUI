@@ -3255,6 +3255,13 @@ function Library:_notifyChanged(flag)
 	for _, fn in ipairs(list) do fire(fn, flag) end
 end
 
+-- Enum lookups by name that never throw (indexing an Enum with an unknown name errors).
+local function _enumByName(enumType, name)
+	local ok, v = pcall(function() return enumType[name] end)
+	if ok and typeof(v) == "EnumItem" then return v end
+	return nil
+end
+
 local function _flagSerialize(entry)
 	local api, kind = entry.api, entry.kind
 	local ok, v = pcall(api.Get, api)
@@ -3264,7 +3271,7 @@ local function _flagSerialize(entry)
 		return nil
 	elseif kind == "keybind" then
 		if typeof(v) == "EnumItem" then return v.Name end
-		return nil
+		return "None" -- unbound is saved too, so loading a config can clear a bind
 	elseif kind == "range" then
 		local ok2, a, b = pcall(api.Get, api)
 		if ok2 then return { a, b } end
@@ -3287,8 +3294,12 @@ local function _flagApply(entry, value)
 			pcall(api.Set, api, Color3.new(value.r, value.g, value.b))
 		end
 	elseif kind == "keybind" then
-		if type(value) == "string" and Enum.KeyCode[value] then
-			pcall(api.Set, api, Enum.KeyCode[value])
+		if value == "None" then
+			if rawget(api, "_noNone") ~= true then pcall(api.Set, api, nil) end
+		elseif type(value) == "string" then
+			-- keyboard keys, or a side mouse button (a UserInputType)
+			local item = _enumByName(Enum.KeyCode, value) or _enumByName(Enum.UserInputType, value)
+			if item then pcall(api.Set, api, item) end
 		end
 	elseif kind == "range" then
 		if type(value) == "table" then pcall(api.Set, api, value[1], value[2]) end
@@ -4547,6 +4558,7 @@ function Tab:AddToggle(opts)
 				if keyCode ~= Enum.KeyCode.Escape then
 					key = keyCode
 					fire(opts.KeybindChanged, key)
+					if opts.KeybindFlag then self.Window:_notifyChanged(opts.KeybindFlag) end
 				end
 				crender()
 				chip.TextColor3 = idleColor()
@@ -4559,6 +4571,15 @@ function Tab:AddToggle(opts)
 			Get = function() return key end,
 			Set = function(_, k) key = k crender() chip.TextColor3 = idleColor() end,
 		}
+		-- KeybindFlag: saved in configs. Loading goes through a setter that also
+		-- fires KeybindChanged, so the script's own clash checks/variables update.
+		if opts.KeybindFlag then
+			local kb = api.Keybind
+			self.Window:_registerFlag(opts.KeybindFlag, {
+				Get = function() return kb.Get() end,
+				Set = function(_, k) kb:Set(k) fire(opts.KeybindChanged, k) end,
+			}, "keybind")
+		end
 	end
 
 	if hasChip then
@@ -4600,6 +4621,7 @@ function Tab:AddToggle(opts)
 		function chipApi:Get() return chipState end
 		chip.Activated:Connect(function() chipApi:Set(not chipState) end)
 		api.Chip = chipApi
+		if opts.ChipFlag then self.Window:_registerFlag(opts.ChipFlag, chipApi, "toggle") end
 
 		local dot
 		if opts.Indicator then
@@ -5168,22 +5190,27 @@ function Tab:AddDropdown(opts)
 	local chipState = opts.ChipDefault == true
 	local chipBtn, chipDot, chipLabel
 	local currentRightInset = TEXT_RIGHT + 4
+	-- chip layout: [pad][dot][gap][text][tail] when off, [tail][text][gap][dot][pad] when on
+	local CHIP_PAD, CHIP_DOT, CHIP_GAP, CHIP_TAIL = 5, 12, 5, 8
+	local chipTextW, chipW = 0, 70
 	if hasChip then
-		currentRightInset = 123
+		chipTextW = math.ceil(Library.MeasureText(tostring(opts.Chip), 10, FONT_BOLD)) + 2
+		chipW = math.max(70, CHIP_PAD + CHIP_DOT + CHIP_GAP + chipTextW + CHIP_TAIL)
+		currentRightInset = 34 + chipW + 11
 		chipBtn = new("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -34, 0.5, 0),
-			Size = UDim2.fromOffset(78, 20), BackgroundColor3 = THEME.Switch,
+			Size = UDim2.fromOffset(chipW, 20), BackgroundColor3 = THEME.Switch,
 			BackgroundTransparency = 0.15, AutoButtonColor = true, Text = "", ZIndex = 7, Parent = frame,
 		}, { corner(10), stroke(Color3.new(1, 1, 1), 0.88) })
 		chipDot = new("Frame", {
-			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 4, 0.5, 0),
-			Size = UDim2.fromOffset(12, 12), BackgroundColor3 = THEME.SubText, BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, CHIP_PAD, 0.5, 0),
+			Size = UDim2.fromOffset(CHIP_DOT, CHIP_DOT), BackgroundColor3 = THEME.SubText, BorderSizePixel = 0,
 			ZIndex = 8, Parent = chipBtn,
 		}, { round() })
 		chipLabel = label({
 			Text = opts.Chip, Font = FONT_BOLD, TextSize = 10, TextColor3 = THEME.SubText,
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
-			Size = UDim2.fromOffset(56, 14), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 8, Parent = chipBtn,
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, CHIP_PAD + CHIP_DOT + CHIP_GAP, 0.5, 0),
+			Size = UDim2.fromOffset(chipTextW, 14), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 8, Parent = chipBtn,
 		})
 	end
 
@@ -5193,21 +5220,31 @@ function Tab:AddDropdown(opts)
 		TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4, Parent = frame,
 	})
 
+	local chipApi
 	if hasChip then
 		local function renderChip(instant)
 			local t = instant and 0 or 0.2
 			tween(chipBtn, t, { BackgroundColor3 = chipState and self.Accent or THEME.Switch })
 			tween(chipDot, t, { BackgroundColor3 = chipState and self.AccentInverse or THEME.SubText,
-				Position = chipState and UDim2.new(1, -16, 0.5, 0) or UDim2.new(0, 4, 0.5, 0) })
-			tween(chipLabel, t, { TextColor3 = chipState and self.AccentInverse or THEME.SubText })
+				Position = chipState and UDim2.new(0, chipW - CHIP_PAD - CHIP_DOT, 0.5, 0) or UDim2.new(0, CHIP_PAD, 0.5, 0) })
+			tween(chipLabel, t, { TextColor3 = chipState and self.AccentInverse or THEME.SubText,
+				Position = chipState and UDim2.new(0, CHIP_TAIL, 0.5, 0) or UDim2.new(0, CHIP_PAD + CHIP_DOT + CHIP_GAP, 0.5, 0) })
 		end
 		renderChip(true)
-		chipBtn.Activated:Connect(function()
-			chipState = not chipState
-			renderChip(false)
-			playSound(SOUND_CLICK, 0.3)
-			fire(opts.ChipCallback, chipState)
-		end)
+		chipApi = {}
+		-- silent = just move the switch (no sound, no ChipCallback)
+		function chipApi:Set(on, silent)
+			on = on == true
+			if on == chipState then return end
+			chipState = on
+			renderChip(silent == true)
+			if silent ~= true then
+				playSound(SOUND_CLICK, 0.3)
+				fire(opts.ChipCallback, chipState)
+			end
+		end
+		function chipApi:Get() return chipState end
+		chipBtn.Activated:Connect(function() chipApi:Set(not chipState) end)
 	end
 	local arrowUseIcon = type(ICONS.Arrow) == "string" and ICONS.Arrow ~= ""
 	local arrow
@@ -5344,7 +5381,9 @@ function Tab:AddDropdown(opts)
 
 	header.Activated:Connect(function() api:SetOpen(not isOpen) end)
 	refresh(true)
+	api.Chip = chipApi
 	self.Window:_registerFlag(opts.Flag, api, "dropdown")
+	if chipApi and opts.ChipFlag then self.Window:_registerFlag(opts.ChipFlag, chipApi, "toggle") end
 	return api
 end
 
@@ -6083,6 +6122,7 @@ function Tab:AddKeybind(opts)
 	end)
 
 	render()
+	if opts.AllowNone == false then api._noNone = true end
 	self.Window:_registerFlag(opts.Flag, api, "keybind")
 	return api
 end
