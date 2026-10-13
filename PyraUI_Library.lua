@@ -716,6 +716,7 @@ function Library.new(config)
 		return b
 	end
 	local closeButton = dockButton("×", -6, ICONS.Close)
+	self.CloseButton = closeButton
 	self.MinButton = dockButton("-", -34, ICONS.Minimize)
 	self.MinButtonIcon = self.MinButton:FindFirstChildOfClass("ImageLabel")
 	closeButton.Activated:Connect(function() self:Hide() end)
@@ -1565,14 +1566,41 @@ function Library:SetMinimized(state)
 		end
 	end
 
-	local iconsW = 0
-	for _, e in ipairs(self.TabIcons or {}) do iconsW = iconsW + e.holder.Size.X.Offset + 4 end
-	local dockUsed = DOCK_TABS_X + (self.TabBarWidth or 0) + iconsW + 48 + 88
-	local miniW = math.clamp(dockUsed, 320, WINDOW_W)
+	-- Minimized = just the logo, the tabs and the restore button. The Discord icon,
+	-- search and X are hidden and the tabs are packed tight, so the window shrinks
+	-- to what is left. Tab buttons stay clickable: clicking one restores the window.
+	local MINI_MIN_W = 240
+	local function setChrome(visible)
+		if self.CloseButton then self.CloseButton.Visible = visible end
+		if self.SearchBar then self.SearchBar.Visible = visible end
+		for _, e in ipairs(self.TabIcons or {}) do e.holder.Visible = visible end
+		if self.MinButton then
+			tween(self.MinButton, 0.3, { Position = UDim2.new(1, visible and -34 or -6, 0.5, 0) })
+		end
+	end
+	local function layoutTabs(compact)
+		local x = 0
+		for _, t in ipairs(self.Tabs) do
+			local btn = t.Button
+			if btn and t._fullW then
+				local w, px = t._fullW, t._fullX
+				if compact then
+					w = math.ceil(t.TextW or 0) + 12
+					px = x
+					x = x + w + 2
+				end
+				tween(btn, 0.3, { Position = UDim2.fromOffset(px, 0), Size = UDim2.fromOffset(w, TAB_H) })
+			end
+		end
+		return math.max(x - 2, 0)
+	end
 
 	if state then
 		if self._closeSearch then self:_closeSearch() end
-		if self.SearchBar then self.SearchBar.Visible = false end
+		setChrome(false)
+		local tabsW = layoutTabs(true)
+		tween(self.TabBar, 0.3, { Size = UDim2.fromOffset(tabsW, TAB_H) })
+		local miniW = math.clamp(DOCK_TABS_X + tabsW + 8 + 34, MINI_MIN_W, WINDOW_W)
 		tween(self.Panel, 0.35, { Size = UDim2.new(1, 0, 0, 0) }).Completed:Connect(function()
 			if self.Minimized then self.Panel.Visible = false end
 		end)
@@ -1580,7 +1608,9 @@ function Library:SetMinimized(state)
 		tween(self.Footer, 0.35, { Position = UDim2.new(0, 0, 0, DOCK_H + GAP), Size = UDim2.new(1, 0, 0, fh) })
 		tween(self.Holder, 0.4, { Size = UDim2.fromOffset(miniW, DOCK_H + GAP + fh) }, Enum.EasingStyle.Quint)
 	else
-		if self.SearchBar then self.SearchBar.Visible = true end
+		setChrome(true)
+		layoutTabs(false)
+		tween(self.TabBar, 0.3, { Size = UDim2.fromOffset(math.max((self.TabBarWidth or 0) - 2, 0), TAB_H) })
 		self.Panel.Visible = true
 		tween(self.Panel, 0.4, { Size = UDim2.new(1, 0, 0, self.PanelH or PANEL_H) })
 		local fh = self:_layoutFooter(WINDOW_W)
@@ -3520,6 +3550,8 @@ function Library:AddTab(name, tabOpts)
 	local textWidth = Library.MeasureText(name, 13, FONT_MEDIUM)
 	local width = math.max(44, math.ceil(textWidth) + 20)
 	local x = self.TabBarWidth
+	tab.TextW = Library.MeasureText(name, 13, FONT_BOLD)
+	tab._fullX, tab._fullW = x, width
 	self.TabBarWidth = x + width + 2
 	self.TabBar.Size = UDim2.fromOffset(self.TabBarWidth - 2, TAB_H)
 	self:_layoutTabIcons()
