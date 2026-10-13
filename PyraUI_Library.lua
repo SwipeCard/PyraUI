@@ -1415,7 +1415,8 @@ function Library.MeasureText(text, size, font)
 	return #text * size * 0.56
 end
 
-function Library.ComputeFooterLayout(W, nameW, premiumW, chipWs)
+function Library.ComputeFooterLayout(W, nameW, premiumW, chipWs, reserve)
+	reserve = reserve or 0
 	local PAD, NAME_X, TOP_H, CHIP_H, CHIP_GAP, ROW_GAP = 12, 50, 48, 30, 12, 6
 	local STACK_GAP, BOTTOM_PAD, MIN_NAME, IDENT_GAP, MAX_SPREAD = 6, 10, 96, 14, 24
 	local n = #chipWs
@@ -1424,10 +1425,10 @@ function Library.ComputeFooterLayout(W, nameW, premiumW, chipWs)
 	local identMin = math.max(NAME_X + math.min(nameW, MIN_NAME), 67 + premiumW)
 	local out = { chips = {}, ruleY = TOP_H - 1 }
 
-	if identMin + IDENT_GAP + chipsTotal + PAD <= W then
+	if identMin + IDENT_GAP + chipsTotal + PAD + reserve <= W then
 		out.mode = "row"
 		out.height = TOP_H
-		local x = W - PAD - chipsTotal
+		local x = W - PAD - reserve - chipsTotal
 		out.nameWidth = math.max(0, math.min(nameW, x - IDENT_GAP - NAME_X))
 		local y = (TOP_H - CHIP_H) / 2
 		local prevRight
@@ -1443,7 +1444,7 @@ function Library.ComputeFooterLayout(W, nameW, premiumW, chipWs)
 	end
 
 	out.mode = "stack"
-	out.nameWidth = math.max(0, math.min(nameW, W - PAD - NAME_X))
+	out.nameWidth = math.max(0, math.min(nameW, W - PAD - NAME_X - reserve))
 	local avail = math.max(W - 2 * PAD, 1)
 	local lines, line, lineW = {}, {}, 0
 	for i = 1, n do
@@ -1494,7 +1495,12 @@ function Library:_layoutFooter(W)
 	end
 	local nameW = math.ceil(Library.MeasureText(info.nameLabel.Text, 13, FONT_BOLD)) + 2
 	local premiumW = math.ceil(Library.MeasureText(info.premiumLabel.Text, 13, FONT_BOLD)) + 2
-	local L = Library.ComputeFooterLayout(W, nameW, premiumW, widths)
+	local reserve = 0
+	if self._iconsInFooter then
+		for _, e in ipairs(self.TabIcons or {}) do reserve = reserve + e.holder.Size.X.Offset + 4 end
+		reserve = reserve + 2
+	end
+	local L = Library.ComputeFooterLayout(W, nameW, premiumW, widths, reserve)
 	info.nameLabel.Size = UDim2.fromOffset(L.nameWidth, 16)
 	for i, c in ipairs(info.chips) do
 		local p = L.chips[i]
@@ -1566,14 +1572,14 @@ function Library:SetMinimized(state)
 		end
 	end
 
-	-- Minimized = just the logo, the tabs and the restore button. The Discord icon,
-	-- search and X are hidden and the tabs are packed tight, so the window shrinks
-	-- to what is left. Tab buttons stay clickable: clicking one restores the window.
+	-- Minimized = just the logo, the tabs and the restore button. Search and X are
+	-- hidden, the Discord icon moves to the right end of the footer (next to the
+	-- username) and the tabs are packed tight, so the window shrinks to what is left. Tab buttons stay clickable: clicking one restores the window.
 	local MINI_MIN_W = 240
 	local function setChrome(visible)
 		if self.CloseButton then self.CloseButton.Visible = visible end
 		if self.SearchBar then self.SearchBar.Visible = visible end
-		for _, e in ipairs(self.TabIcons or {}) do e.holder.Visible = visible end
+		self:_placeTabIcons(not visible)
 		if self.MinButton then
 			tween(self.MinButton, 0.3, { Position = UDim2.new(1, visible and -34 or -6, 0.5, 0) })
 		end
@@ -3608,8 +3614,30 @@ function Library:AddTab(name, tabOpts)
 	return tab
 end
 
+function Library:_placeTabIcons(inFooter)
+	self._iconsInFooter = inFooter
+	local icons = self.TabIcons
+	if not icons then return end
+	if inFooter then
+		local right = 12
+		for i = #icons, 1, -1 do
+			local h = icons[i].holder
+			h.Parent = self.Footer
+			h.AnchorPoint = Vector2.new(1, 0.5)
+			h.Position = UDim2.new(1, -right, 0, 24)
+			right = right + h.Size.X.Offset + 4
+		end
+	else
+		for _, e in ipairs(icons) do
+			e.holder.Parent = self.Dock
+			e.holder.AnchorPoint = Vector2.new(0, 0.5)
+		end
+		self:_layoutTabIcons()
+	end
+end
+
 function Library:_layoutTabIcons()
-	if not self.TabIcons then return end
+	if not self.TabIcons or self._iconsInFooter then return end
 	local x = DOCK_TABS_X + (self.TabBarWidth or 0) + 6
 	for _, e in ipairs(self.TabIcons) do
 		e.holder.Position = UDim2.new(0, x, 0.5, 0)
