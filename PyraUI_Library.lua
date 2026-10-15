@@ -3615,22 +3615,27 @@ function Library:AddTab(name, tabOpts)
 	return tab
 end
 
--- Mouse-wheel scrolling: every ScrollingFrame in the window moves a fixed WHEEL_STEP
--- pixels per notch instead of Roblox's own (much longer) step. The built-in wheel
--- scrolling is switched off for them and the wheel is handled here: the smallest
--- scrolling area under the cursor takes the notch, and if it is already at its end the
--- next one out gets it. Skipped on touch devices, where scrolling stays native.
+-- Mouse-wheel scrolling: a fixed WHEEL_STEP pixels per notch instead of Roblox's own (much
+-- longer) step. It can never leave scrolling dead: Roblox's own wheel scrolling stays
+-- switched on until this has scrolled something by itself once; only then is the built-in
+-- wheel scrolling turned off. The scrolling area is found from the engine's own wheel
+-- events on each ScrollingFrame, falling back to the cursor position; the smallest one
+-- that can still move takes the notch (so a list inside a page scrolls first, and the
+-- page takes over at the list's end). Skipped on touch devices, where scrolling is native.
 -- Change WHEEL_STEP to make scrolling longer or shorter.
 function Library:_initWheel()
 	if UserInputService.TouchEnabled or not UserInputService.MouseEnabled then return end
-	local WHEEL_STEP = 40
+	local WHEEL_STEP = 30
 	local GuiService = game:GetService("GuiService")
 	local frames = setmetatable({}, { __mode = "k" })
+	local hover = setmetatable({}, { __mode = "k" })
+	local custom = false
 	local function track(inst)
-		if inst:IsA("ScrollingFrame") then
-			frames[inst] = true
-			inst.ScrollingEnabled = false
-		end
+		if not inst:IsA("ScrollingFrame") then return end
+		frames[inst] = true
+		if custom then inst.ScrollingEnabled = false end
+		inst.MouseWheelForward:Connect(function() hover[inst] = os.clock() end)
+		inst.MouseWheelBackward:Connect(function() hover[inst] = os.clock() end)
 	end
 	for _, inst in ipairs(self.Gui:GetDescendants()) do track(inst) end
 	table.insert(self.Connections, self.Gui.DescendantAdded:Connect(track))
@@ -3650,23 +3655,41 @@ function Library:_initWheel()
 				if x >= p.X and x <= p.X + a.X and y >= p.Y and y <= p.Y + a.Y then list[#list + 1] = frame end
 			end
 		end
+		return list
+	end
+	local function scrollOne(list, dir)
 		table.sort(list, function(a, b)
 			return a.AbsoluteSize.X * a.AbsoluteSize.Y < b.AbsoluteSize.X * b.AbsoluteSize.Y
 		end)
-		return list
+		for _, frame in ipairs(list) do
+			local before = frame.CanvasPosition
+			frame.CanvasPosition = Vector2.new(before.X, math.max(before.Y - dir * WHEEL_STEP, 0))
+			if frame.CanvasPosition.Y ~= before.Y then return true end
+		end
+		return false
 	end
 	table.insert(self.Connections, UserInputService.InputChanged:Connect(function(input)
 		if input.UserInputType ~= Enum.UserInputType.MouseWheel or not self.Open then return end
 		local dir = input.Position.Z
 		if dir == 0 then return end
-		local mouse = UserInputService:GetMouseLocation() - GuiService:GetGuiInset()
-		local list = framesAt(mouse.X, mouse.Y)
-		if #list == 0 then list = framesAt(input.Position.X, input.Position.Y) end
-		for _, frame in ipairs(list) do
-			local before = frame.CanvasPosition
-			frame.CanvasPosition = Vector2.new(before.X, math.max(before.Y - dir * WHEEL_STEP, 0))
-			if frame.CanvasPosition.Y ~= before.Y then return end
-		end
+		task.defer(function()
+			local now = os.clock()
+			local list = {}
+			for frame, at in pairs(hover) do
+				if now - at < 0.1 and frame.Parent and shown(frame) then list[#list + 1] = frame end
+			end
+			if #list == 0 then
+				local m = UserInputService:GetMouseLocation()
+				local inset = GuiService:GetGuiInset()
+				list = framesAt(m.X - inset.X, m.Y - inset.Y)
+				if #list == 0 then list = framesAt(m.X, m.Y) end
+				if #list == 0 then list = framesAt(input.Position.X, input.Position.Y) end
+			end
+			if scrollOne(list, dir) and not custom then
+				custom = true
+				for frame in pairs(frames) do frame.ScrollingEnabled = false end
+			end
+		end)
 	end))
 end
 
