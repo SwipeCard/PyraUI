@@ -4761,12 +4761,15 @@ function Tab:AddToggle(opts)
 		}
 		if inlineRow then
 			chipProps.LayoutOrder = 2
+			chipProps.Size = UDim2.fromOffset(0, 20)
+			chipProps.AutomaticSize = Enum.AutomaticSize.X
+			chipProps.TextXAlignment = Enum.TextXAlignment.Left
 			chipProps.Parent = inlineRow
 		else
 			chipProps.AnchorPoint = Vector2.new(1, 0.5)
 			chipProps.Position = UDim2.new(1, chipX, 0.5, 0)
 		end
-		local chip = new("TextButton", chipProps)
+		local chip = new("TextButton", chipProps, inlineRow and { pad(0, 0, 0, 4) } or nil)
 		local function chrender()
 			chip.TextColor3 = chipState and THEME.Text or THEME.ChipOff
 		end
@@ -4792,18 +4795,19 @@ function Tab:AddToggle(opts)
 				if type(text) == "string" then
 					local state = opts["Chip" .. n .. "Default"] == true
 					local btn = new("TextButton", {
-						Size = UDim2.fromOffset(math.ceil(Library.MeasureText(tostring(text), 11, FONT_BOLD)) + 4, 20),
+						Size = UDim2.fromOffset(0, 20),
+						AutomaticSize = Enum.AutomaticSize.X,
 						BackgroundTransparency = 1,
 						AutoButtonColor = false,
 						Font = FONT_BOLD,
 						TextSize = 11,
 						TextColor3 = state and THEME.Text or THEME.ChipOff,
-						TextXAlignment = Enum.TextXAlignment.Right,
+						TextXAlignment = Enum.TextXAlignment.Left,
 						Text = text,
 						LayoutOrder = n + 2,
 						ZIndex = 7,
 						Parent = inlineRow,
-					})
+					}, { pad(0, 0, 0, 4) })
 					local extra = {}
 					function extra:Set(on)
 						on = on == true
