@@ -1237,6 +1237,7 @@ function Library.new(config)
 		if self.Open then tween(self.UIScale, 0.3, { Scale = self:_fitScale() }) end
 		self:_applyScaleToAll(true)
 	end))
+	self:_initWheel()
 
 	if not self.AcrylicEnabled then
 		self.Dock.BackgroundTransparency = SOLID_T
@@ -3614,6 +3615,37 @@ function Library:AddTab(name, tabOpts)
 	return tab
 end
 
+-- Mouse-wheel scrolling moves a ScrollingFrame a fixed (and, here, too long) distance per
+-- notch and Roblox has no setting for it. So while the wheel is being used, whatever the
+-- scroll did to CanvasPosition since the last frame is cut to WHEEL_SCALE of itself, for
+-- every ScrollingFrame in this window (pages, search results, lists). Touch is untouched.
+function Library:_initWheel()
+	local WHEEL_SCALE, WHEEL_WINDOW = 0.5, 0.35
+	local frames = setmetatable({}, { __mode = "k" })
+	local wheelUntil = 0
+	local function track(inst)
+		if inst:IsA("ScrollingFrame") then frames[inst] = inst.CanvasPosition.Y end
+	end
+	for _, inst in ipairs(self.Gui:GetDescendants()) do track(inst) end
+	table.insert(self.Connections, self.Gui.DescendantAdded:Connect(track))
+	table.insert(self.Connections, UserInputService.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseWheel then wheelUntil = os.clock() + WHEEL_WINDOW end
+	end))
+	table.insert(self.Connections, RunService.RenderStepped:Connect(function()
+		local halving = os.clock() <= wheelUntil
+		for frame, last in pairs(frames) do
+			local y = frame.CanvasPosition.Y
+			if y ~= last then
+				if halving then
+					frame.CanvasPosition = Vector2.new(frame.CanvasPosition.X, last + (y - last) * WHEEL_SCALE)
+					y = frame.CanvasPosition.Y
+				end
+				frames[frame] = y
+			end
+		end
+	end))
+end
+
 function Library:_placeTabIcons(inFooter)
 	self._iconsInFooter = inFooter
 	local icons = self.TabIcons
@@ -4682,6 +4714,36 @@ function Tab:AddToggle(opts)
 		chip.Activated:Connect(function() chipApi:Set(not chipState) end)
 		api.Chip = chipApi
 		if opts.ChipFlag then self.Window:_registerFlag(opts.ChipFlag, chipApi, "toggle") end
+
+		if type(opts.Chip2) == "string" and inlineRow then
+			local chip2State = opts.Chip2Default == true
+			local chip2 = new("TextButton", {
+				Size = UDim2.fromOffset(math.ceil(Library.MeasureText(tostring(opts.Chip2), 11, FONT_BOLD)) + 4, 20),
+				BackgroundTransparency = 1,
+				AutoButtonColor = false,
+				Font = FONT_BOLD,
+				TextSize = 11,
+				TextColor3 = chip2State and THEME.Text or THEME.ChipOff,
+				TextXAlignment = Enum.TextXAlignment.Right,
+				Text = opts.Chip2,
+				LayoutOrder = 3,
+				ZIndex = 7,
+				Parent = inlineRow,
+			})
+			local chip2Api = {}
+			function chip2Api:Set(on)
+				on = on == true
+				if on == chip2State then return end
+				chip2State = on
+				chip2.TextColor3 = on and THEME.Text or THEME.ChipOff
+				playSound(SOUND_CLICK, 0.22, on and 1.05 or 0.95)
+				fire(opts.Chip2Callback, on)
+			end
+			function chip2Api:Get() return chip2State end
+			chip2.Activated:Connect(function() chip2Api:Set(not chip2State) end)
+			api.Chip2 = chip2Api
+			if opts.Chip2Flag then self.Window:_registerFlag(opts.Chip2Flag, chip2Api, "toggle") end
+		end
 
 		local dot
 		if opts.Indicator then
