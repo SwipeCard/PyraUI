@@ -3626,7 +3626,7 @@ end
 -- snappier (higher) or softer (lower).
 function Library:_initWheel()
 	if UserInputService.TouchEnabled or not UserInputService.MouseEnabled then return end
-	local WHEEL_STEP, WHEEL_EASE = 90, 22
+	local WHEEL_STEP, WHEEL_EASE = 180, 22
 	local GuiService = game:GetService("GuiService")
 	local frames = setmetatable({}, { __mode = "k" })
 	local hover = setmetatable({}, { __mode = "k" })
