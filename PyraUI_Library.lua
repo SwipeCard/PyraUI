@@ -1237,6 +1237,7 @@ function Library.new(config)
 		if self.Open then tween(self.UIScale, 0.3, { Scale = self:_fitScale() }) end
 		self:_applyScaleToAll(true)
 	end))
+	self:_initWheel()
 
 	if not self.AcrylicEnabled then
 		self.Dock.BackgroundTransparency = SOLID_T
@@ -3612,6 +3613,61 @@ function Library:AddTab(name, tabOpts)
 	table.insert(self.Tabs, tab)
 	if not self.ActiveTab then self:SelectTab(tab, true) end
 	return tab
+end
+
+-- Mouse-wheel scrolling: every ScrollingFrame in the window moves a fixed WHEEL_STEP
+-- pixels per notch instead of Roblox's own (much longer) step. The built-in wheel
+-- scrolling is switched off for them and the wheel is handled here: the smallest
+-- scrolling area under the cursor takes the notch, and if it is already at its end the
+-- next one out gets it. Skipped on touch devices, where scrolling stays native.
+-- Change WHEEL_STEP to make scrolling longer or shorter.
+function Library:_initWheel()
+	if UserInputService.TouchEnabled or not UserInputService.MouseEnabled then return end
+	local WHEEL_STEP = 30
+	local GuiService = game:GetService("GuiService")
+	local frames = setmetatable({}, { __mode = "k" })
+	local function track(inst)
+		if inst:IsA("ScrollingFrame") then
+			frames[inst] = true
+			inst.ScrollingEnabled = false
+		end
+	end
+	for _, inst in ipairs(self.Gui:GetDescendants()) do track(inst) end
+	table.insert(self.Connections, self.Gui.DescendantAdded:Connect(track))
+	local function shown(frame)
+		local node = frame
+		while node and node ~= self.Gui do
+			if node:IsA("GuiObject") and not node.Visible then return false end
+			node = node.Parent
+		end
+		return true
+	end
+	local function framesAt(x, y)
+		local list = {}
+		for frame in pairs(frames) do
+			if frame.Parent and shown(frame) then
+				local p, a = frame.AbsolutePosition, frame.AbsoluteSize
+				if x >= p.X and x <= p.X + a.X and y >= p.Y and y <= p.Y + a.Y then list[#list + 1] = frame end
+			end
+		end
+		table.sort(list, function(a, b)
+			return a.AbsoluteSize.X * a.AbsoluteSize.Y < b.AbsoluteSize.X * b.AbsoluteSize.Y
+		end)
+		return list
+	end
+	table.insert(self.Connections, UserInputService.InputChanged:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseWheel or not self.Open then return end
+		local dir = input.Position.Z
+		if dir == 0 then return end
+		local mouse = UserInputService:GetMouseLocation() - GuiService:GetGuiInset()
+		local list = framesAt(mouse.X, mouse.Y)
+		if #list == 0 then list = framesAt(input.Position.X, input.Position.Y) end
+		for _, frame in ipairs(list) do
+			local before = frame.CanvasPosition
+			frame.CanvasPosition = Vector2.new(before.X, math.max(before.Y - dir * WHEEL_STEP, 0))
+			if frame.CanvasPosition.Y ~= before.Y then return end
+		end
+	end))
 end
 
 function Library:_placeTabIcons(inFooter)
