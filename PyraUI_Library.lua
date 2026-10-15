@@ -3623,7 +3623,7 @@ end
 -- Change WHEEL_STEP to make scrolling longer or shorter.
 function Library:_initWheel()
 	if UserInputService.TouchEnabled or not UserInputService.MouseEnabled then return end
-	local WHEEL_STEP = 20
+	local WHEEL_STEP = 10
 	local GuiService = game:GetService("GuiService")
 	local frames = setmetatable({}, { __mode = "k" })
 	local function track(inst)
