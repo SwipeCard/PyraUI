@@ -3615,20 +3615,22 @@ function Library:AddTab(name, tabOpts)
 	return tab
 end
 
--- Mouse-wheel scrolling: a fixed WHEEL_STEP pixels per notch instead of Roblox's own (much
--- longer) step. It can never leave scrolling dead: Roblox's own wheel scrolling stays
+-- Mouse-wheel scrolling: a fixed WHEEL_STEP pixels per notch (eased in over a fraction of a
+-- second) instead of Roblox's own step. It can never leave scrolling dead: Roblox's own wheel scrolling stays
 -- switched on until this has scrolled something by itself once; only then is the built-in
 -- wheel scrolling turned off. The scrolling area is found from the engine's own wheel
 -- events on each ScrollingFrame, falling back to the cursor position; the smallest one
 -- that can still move takes the notch (so a list inside a page scrolls first, and the
 -- page takes over at the list's end). Skipped on touch devices, where scrolling is native.
--- Change WHEEL_STEP to make scrolling longer or shorter.
+-- Change WHEEL_STEP to make scrolling longer or shorter, WHEEL_EASE to make the glide
+-- snappier (higher) or softer (lower).
 function Library:_initWheel()
 	if UserInputService.TouchEnabled or not UserInputService.MouseEnabled then return end
-	local WHEEL_STEP = 30
+	local WHEEL_STEP, WHEEL_EASE = 90, 22
 	local GuiService = game:GetService("GuiService")
 	local frames = setmetatable({}, { __mode = "k" })
 	local hover = setmetatable({}, { __mode = "k" })
+	local targets = setmetatable({}, { __mode = "k" })
 	local custom = false
 	local function track(inst)
 		if not inst:IsA("ScrollingFrame") then return end
@@ -3657,17 +3659,37 @@ function Library:_initWheel()
 		end
 		return list
 	end
+	local function maxScroll(frame)
+		local cur = frame.CanvasPosition
+		frame.CanvasPosition = Vector2.new(cur.X, 1e6)
+		local top = frame.CanvasPosition.Y
+		frame.CanvasPosition = cur
+		return top
+	end
 	local function scrollOne(list, dir)
 		table.sort(list, function(a, b)
 			return a.AbsoluteSize.X * a.AbsoluteSize.Y < b.AbsoluteSize.X * b.AbsoluteSize.Y
 		end)
 		for _, frame in ipairs(list) do
-			local before = frame.CanvasPosition
-			frame.CanvasPosition = Vector2.new(before.X, math.max(before.Y - dir * WHEEL_STEP, 0))
-			if frame.CanvasPosition.Y ~= before.Y then return true end
+			local base = targets[frame] or frame.CanvasPosition.Y
+			local goal = math.clamp(base - dir * WHEEL_STEP, 0, maxScroll(frame))
+			if goal ~= base then
+				targets[frame] = goal
+				return true
+			end
 		end
 		return false
 	end
+	table.insert(self.Connections, RunService.RenderStepped:Connect(function(dt)
+		local k = 1 - math.exp(-dt * WHEEL_EASE)
+		for frame, goal in pairs(targets) do
+			local pos = frame.CanvasPosition
+			local nextY = pos.Y + (goal - pos.Y) * k
+			if math.abs(goal - pos.Y) < 0.5 then nextY = goal end
+			frame.CanvasPosition = Vector2.new(pos.X, nextY)
+			if nextY == goal or frame.CanvasPosition.Y == pos.Y then targets[frame] = nil end
+		end
+	end))
 	table.insert(self.Connections, UserInputService.InputChanged:Connect(function(input)
 		if input.UserInputType ~= Enum.UserInputType.MouseWheel or not self.Open then return end
 		local dir = input.Position.Z
