@@ -4807,7 +4807,7 @@ function Tab:AddToggle(opts)
 						LayoutOrder = n + 2,
 						ZIndex = 7,
 						Parent = inlineRow,
-					}, { pad(0, 0, 0, 4) })
+					}, { pad(0, 0, 0, keyInline and 2 or 4) })
 					local extra = {}
 					function extra:Set(on)
 						on = on == true
